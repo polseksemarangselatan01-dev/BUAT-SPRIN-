@@ -219,9 +219,13 @@ export default function App() {
         <DashboardHeader
           onToggleSidebar={() => setSidebarOpen((o) => !o)}
           onSaveToArchive={handleSaveToArchive}
-          onExportWord={() => {
-            exportSprinToWord(activeDoc);
-            showToast('File .DOC diunduh');
+          onExportWord={async () => {
+            try {
+              await exportSprinToWord(activeDoc);
+              showToast('File .DOCX (A4 · Arial 12pt) diunduh');
+            } catch {
+              showToast('Gagal membuat file .DOCX');
+            }
           }}
           onPrint={handlePrint}
           completionPercent={completionPercent}

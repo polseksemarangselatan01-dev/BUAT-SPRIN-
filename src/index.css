@@ -25,6 +25,8 @@
 
 .letter-paper {
   font-family: Arial, Helvetica, sans-serif;
+  font-size: 12pt;
+  line-height: 1.0;
   color: #000000;
   background-color: #ffffff;
   width: 210mm;
@@ -51,10 +53,10 @@
   background: #524331;
 }
 
-/* Print Styles for Exact A4 2-Page Letter Output */
+/* Print Styles for Exact A4 Letter Output (Arial 12pt, Margin Kiri 2cm, Kanan 1.5cm, Atas 2cm, Bawah 1.5cm) */
 @media print {
   @page {
-    size: A4 portrait;
+    size: 210mm 297mm;
     margin: 0;
   }
 
@@ -62,6 +64,9 @@
   body {
     background: #ffffff !important;
     color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 12pt !important;
+    line-height: 1.0 !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 210mm !important;
@@ -84,10 +89,19 @@
     background: #ffffff !important;
   }
 
+  .letter-paper,
+  .letter-paper * {
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
   .print-page-sheet {
     width: 210mm !important;
+    height: 297mm !important;
     min-height: 297mm !important;
     max-height: 297mm !important;
+    padding: 20mm 15mm 15mm 20mm !important;
+    font-size: 12pt !important;
+    line-height: 1.0 !important;
     margin: 0 !important;
     box-shadow: none !important;
     border: none !important;
