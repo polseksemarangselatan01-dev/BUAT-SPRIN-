@@ -82,53 +82,74 @@ export const SATKER_PRESETS: SatkerPreset[] = [
   },
 ];
 
-export const INITIAL_PERSONNEL_ROSTER: PersonnelRow[] = [
+const NOMINATIF_POLSEK_SMG_SELATAN: PersonnelRow[] = [
+  { id: 'pers-nom-1', nama: 'RISMANTO,S.H.,M.H.', pangkat: 'KOMPOL', nrp: '73020406', jabatan: 'KAPOLSEK', ket: '' },
+  { id: 'pers-nom-2', nama: 'GINYONO,S.H.', pangkat: 'AKP', nrp: '70100153', jabatan: 'WAKA POLSEK', ket: '' },
+  { id: 'pers-nom-3', nama: 'KISWORO, S.H.', pangkat: 'IPTU', nrp: '71070044', jabatan: 'PS. KANITBINMAS', ket: '' },
+  { id: 'pers-nom-4', nama: 'Dr. TRI SUTRINO,S.H.,M.H.', pangkat: 'IPTU', nrp: '72050205', jabatan: 'KANIT RESKRIM', ket: '' },
+  { id: 'pers-nom-5', nama: 'SUBIANTO, S.H.', pangkat: 'IPTU', nrp: '72100003', jabatan: 'KANITINTELKAM', ket: '' },
+  { id: 'pers-nom-6', nama: 'M. ALI MAGHFUR,S.H.', pangkat: 'IPTU', nrp: '74080418', jabatan: 'PS.KANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-7', nama: 'TEGUH SANTOSO,S.H.,M.M.', pangkat: 'IPDA', nrp: '83120118', jabatan: 'KANIT PROPAM', ket: '' },
+  { id: 'pers-nom-8', nama: 'SUKIJAN', pangkat: 'AIPTU', nrp: '69010254', jabatan: 'PS.PANITOPSNAL 1 UNIT RESKRIM', ket: '' },
+  { id: 'pers-nom-9', nama: 'ADI GESIT SATATA', pangkat: 'AIPTU', nrp: '72120148', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-10', nama: 'ANDI SETIYANTO', pangkat: 'AIPTU', nrp: '73120096', jabatan: 'BHABIN MUGASSARI', ket: '' },
+  { id: 'pers-nom-11', nama: 'I YADI YANTO SUPYAN', pangkat: 'AIPTU', nrp: '74020269', jabatan: 'BHABIN WONODRI', ket: '' },
+  { id: 'pers-nom-12', nama: 'AHMAD SOKI', pangkat: 'AIPTU', nrp: '75050022', jabatan: 'PS. PANIT 3 SAMAPTA', ket: '' },
+  { id: 'pers-nom-13', nama: 'TAUFIKURAHMAN', pangkat: 'AIPTU', nrp: '76040696', jabatan: 'PS. PANIT 2 LANTAS', ket: '' },
+  { id: 'pers-nom-14', nama: 'AGUS PURNOMO', pangkat: 'AIPTU', nrp: '78081511', jabatan: 'PS. PANIT 1 SAMAPTA', ket: '' },
+  { id: 'pers-nom-15', nama: 'HARDIYANTO', pangkat: 'AIPTU', nrp: '79010899', jabatan: 'BANIT INTELKAM', ket: '' },
+  { id: 'pers-nom-16', nama: 'AGUS PRASTYANTO', pangkat: 'AIPTU', nrp: '79021084', jabatan: 'PS. KASIHUMAS', ket: '' },
+  { id: 'pers-nom-17', nama: 'METRIZAL, S.H.', pangkat: 'AIPTU', nrp: '79051605', jabatan: 'BHABIN RANDUSARI', ket: '' },
+  { id: 'pers-nom-18', nama: 'ALI MAHFUD', pangkat: 'AIPTU', nrp: '79081059', jabatan: 'PS. KA SIUM', ket: '' },
+  { id: 'pers-nom-19', nama: 'SYAIFUL BAHRI, S.H.', pangkat: 'AIPTU', nrp: '80030582', jabatan: 'PS.KA SPKT 1', ket: '' },
+  { id: 'pers-nom-20', nama: 'SUHARTANTO, S.H.', pangkat: 'AIPTU', nrp: '80040997', jabatan: 'BHABIN PLEBURAN', ket: '' },
+  { id: 'pers-nom-21', nama: 'ANTON RAHARDJO, S.H.', pangkat: 'AIPTU', nrp: '80100908', jabatan: 'PS. PANITOPSNAL INTEL', ket: '' },
+  { id: 'pers-nom-22', nama: 'EKO PRIYANTO, S.H.', pangkat: 'AIPTU', nrp: '81050986', jabatan: 'BANIT RESKRIM', ket: '' },
+  { id: 'pers-nom-23', nama: 'BAMBANG TYAS CAHYA YULIANTO', pangkat: 'AIPTU', nrp: '81070388', jabatan: 'PS.PANITOPSNAL 3 UNIT RESKRIM', ket: '' },
+  { id: 'pers-nom-24', nama: 'SUTADI DWI SETYONO', pangkat: 'AIPTU', nrp: '82090194', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-25', nama: 'SINGGIH RIYADI', pangkat: 'AIPTU', nrp: '83070106', jabatan: 'PS.PANITOPSNAL 2 UNIT RESKRIM', ket: '' },
+  { id: 'pers-nom-26', nama: 'BANGUN WASKITO, S.H.', pangkat: 'AIPTU', nrp: '83070934', jabatan: 'PS.KA SPKT 2', ket: '' },
+  { id: 'pers-nom-27', nama: 'FERY EKO SAPUTRO', pangkat: 'AIPTU', nrp: '84050075', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-28', nama: 'SUPRIYATNO', pangkat: 'AIPDA', nrp: '72100456', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-29', nama: 'MUSLIH', pangkat: 'AIPDA', nrp: '78041138', jabatan: 'BHABIN LAMPER KIDUL', ket: '' },
+  { id: 'pers-nom-30', nama: 'TONO WIYONO', pangkat: 'AIPDA', nrp: '80110655', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-31', nama: 'EDI BAMBANG MUDIONO', pangkat: 'AIPDA', nrp: '82120819', jabatan: 'BHABIN BULUSTALAN', ket: '' },
+  { id: 'pers-nom-32', nama: 'WARDOYO', pangkat: 'AIPDA', nrp: '83101282', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-33', nama: 'A. ADI WIDYANTORO, S.H.', pangkat: 'AIPDA', nrp: '84030769', jabatan: 'BHABIN LAMPER LOR', ket: '' },
+  { id: 'pers-nom-34', nama: 'JATMIKO NUR. P, S.H.', pangkat: 'AIPDA', nrp: '84051714', jabatan: 'PS. PANIT 2 SAMAPTA', ket: '' },
+  { id: 'pers-nom-35', nama: 'ANDI WIBAWA', pangkat: 'AIPDA', nrp: '84081372', jabatan: 'PS. PANIT 1 LANTAS', ket: '' },
+  { id: 'pers-nom-36', nama: 'CANDRA MARMESA, S.H.', pangkat: 'AIPDA', nrp: '84091212', jabatan: 'BHABIN LAMPER TENGAH', ket: '' },
+  { id: 'pers-nom-37', nama: 'PURBO DWI LAKSONO', pangkat: 'AIPDA', nrp: '84091593', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-38', nama: 'SINAR EKO PANUNTUN', pangkat: 'AIPDA', nrp: '84120677', jabatan: 'BANIT SAMAPTA', ket: '' },
+  { id: 'pers-nom-39', nama: 'DEDY SETYO WIDODO', pangkat: 'AIPDA', nrp: '84120839', jabatan: 'BANIT PROPAM', ket: '' },
+  { id: 'pers-nom-40', nama: 'AGUNG WITONO', pangkat: 'AIPDA', nrp: '84121525', jabatan: 'BANIT RESKRIM', ket: '' },
+  { id: 'pers-nom-41', nama: 'IJMAL AKMAL, S.H.', pangkat: 'AIPDA', nrp: '85011391', jabatan: 'BANIT RESKRIM', ket: '' },
+  { id: 'pers-nom-42', nama: 'ACHMAD TAUFIK, S.H.', pangkat: 'AIPDA', nrp: '85020792', jabatan: 'PS.PANITYANMIN UNIT INTELKAM', ket: '' },
+  { id: 'pers-nom-43', nama: 'MUCHAMAD TOFIQ HIDAYAT, S.H.', pangkat: 'AIPDA', nrp: '85041815', jabatan: 'PS. KA SPKT 3', ket: '' },
+  { id: 'pers-nom-44', nama: 'DODIK EKO ARIPRABOWO, S.H.', pangkat: 'AIPDA', nrp: '85061749', jabatan: 'PS. PANIT 2 BINMAS', ket: '' },
+  { id: 'pers-nom-45', nama: 'ERI SETYAWAN', pangkat: 'AIPDA', nrp: '85081180', jabatan: 'BANIT LANTAS', ket: '' },
+  { id: 'pers-nom-46', nama: 'YUDHA SEPTYAWAN', pangkat: 'AIPDA', nrp: '85090287', jabatan: 'BHABIN PETERONGAN', ket: '' },
+  { id: 'pers-nom-47', nama: 'ARIS ARDIANSYAH, S.H.', pangkat: 'AIPDA', nrp: '86020708', jabatan: 'PS. PANITMIN INTEL', ket: '' },
+  { id: 'pers-nom-48', nama: 'ACHMAD ARWANI, S,Psi', pangkat: 'AIPDA', nrp: '86051244', jabatan: 'BHABIN BARUSARI', ket: '' },
+  { id: 'pers-nom-49', nama: 'SARWO EDY', pangkat: 'AIPDA', nrp: '86121201', jabatan: 'PS. PANIT 1 UNIT BINMAS', ket: '' },
+  { id: 'pers-nom-50', nama: 'HENGKI SETIAJI WIBOWO', pangkat: 'AIPDA', nrp: '87110151', jabatan: 'BAMIN SPKT 1', ket: '' },
+  { id: 'pers-nom-51', nama: 'HERRY PUSPITA WIJAYA, S.H.', pangkat: 'AIPDA', nrp: '88040065', jabatan: 'BANIT INTELKAM', ket: '' },
+  { id: 'pers-nom-52', nama: 'WAHYU ARIEF S', pangkat: 'BRIPKA', nrp: '87070766', jabatan: 'BAMIN SPKT 1', ket: '' },
+  { id: 'pers-nom-53', nama: 'WIWIK HARYANTO', pangkat: 'BRIPKA', nrp: '77070917', jabatan: 'BAMIN SPKT 2', ket: '' },
+  { id: 'pers-nom-54', nama: 'MUNIFATUL LUTHFIAH', pangkat: 'BRIGADIR', nrp: '95100760', jabatan: 'BANIT BINMAS', ket: '' },
+  { id: 'pers-nom-55', nama: 'AFIF YUDHA PRATAMA', pangkat: 'BRIPTU', nrp: '97040637', jabatan: 'BAMIN SPKT 3', ket: '' },
+  { id: 'pers-nom-56', nama: 'ARIEF MUNDRIANTO,S.H.', pangkat: 'AIPTU', nrp: '82050373', jabatan: 'BA POLSEK', ket: '' },
+  { id: 'pers-nom-57', nama: 'TRIMANTO', pangkat: 'AIPTU', nrp: '73050517', jabatan: 'BAPOLSEK', ket: '' },
+  { id: 'pers-nom-58', nama: 'YUNI KURNIA HAPSARI', pangkat: 'PENGATUR', nrp: '197906252014122003', jabatan: 'BANUM SIUM', ket: '' },
+];
+
+const EXISTING_OTHER_PERSONNEL: PersonnelRow[] = [
   {
     id: 'pers-0',
     nama: 'AGUS NURYANTO, S.H.',
     pangkat: 'IPTU',
     nrp: '73090344',
     jabatan: 'PS. KANITLANTAS POLSEK SMG SELATAN POLRESTABES SMG',
-    ket: '',
-  },
-  {
-    id: 'pers-1',
-    nama: 'AHMAD SOKI',
-    pangkat: 'AIPTU',
-    nrp: '75050022',
-    jabatan: 'PS. PANIT 3 SAMAPTA',
-    ket: '',
-  },
-  {
-    id: 'pers-2',
-    nama: 'CANDRA MARMESA, SH',
-    pangkat: 'AIPDA',
-    nrp: '84091212',
-    jabatan: 'BHABIN LAMPER TENGAH',
-    ket: '',
-  },
-  {
-    id: 'pers-3',
-    nama: 'MUSLIH',
-    pangkat: 'AIPDA',
-    nrp: '78041138',
-    jabatan: 'BHABIN LAMPER KIDUL',
-    ket: '',
-  },
-  {
-    id: 'pers-4',
-    nama: 'A ADI WIDYANTORO, SH.',
-    pangkat: 'AIPTU',
-    nrp: '84030769',
-    jabatan: 'BHABIN LAMPER LOR',
-    ket: '',
-  },
-  {
-    id: 'pers-5',
-    nama: 'YUDHA SEPTYAWAN',
-    pangkat: 'AIPDA',
-    nrp: '85090287',
-    jabatan: 'BHABIN PETERONGAN',
     ket: '',
   },
   {
@@ -164,6 +185,36 @@ export const INITIAL_PERSONNEL_ROSTER: PersonnelRow[] = [
     ket: '',
   },
 ];
+
+export function mergePersonnelByNrp(
+  baseList: PersonnelRow[],
+  incomingList: PersonnelRow[]
+): PersonnelRow[] {
+  const byNrp = new Map<string, PersonnelRow>();
+  const order: string[] = [];
+
+  const upsert = (row: PersonnelRow) => {
+    const key = row.nrp.trim();
+    if (!key) return;
+    if (!byNrp.has(key)) {
+      order.push(key);
+      byNrp.set(key, { ...row });
+    } else {
+      const existing = byNrp.get(key)!;
+      byNrp.set(key, { ...existing, ...row, id: existing.id || row.id });
+    }
+  };
+
+  baseList.forEach(upsert);
+  incomingList.forEach(upsert);
+
+  return order.map((key) => byNrp.get(key)!);
+}
+
+export const INITIAL_PERSONNEL_ROSTER: PersonnelRow[] = mergePersonnelByNrp(
+  EXISTING_OTHER_PERSONNEL,
+  NOMINATIF_POLSEK_SMG_SELATAN
+);
 
 export const DEFAULT_STAMP_CONFIG: StampSignatureConfig = {
   stampImageDataUrl: null,
@@ -275,6 +326,8 @@ export const INITIAL_ARCHIVE_DOCUMENTS: SprinDocument[] = [
     pejabatPangkatNrp: 'KOMISARIS POLISI NRP 73020406',
     stampResorText: 'POLRI RESOR KOTA BESAR SEMARANG',
     stampSektorText: 'SEKTOR SEMARANG SELATAN',
-    personelList: INITIAL_PERSONNEL_ROSTER.slice(1, 6).map((p) => ({ ...p })),
+    personelList: INITIAL_PERSONNEL_ROSTER.filter((p) =>
+      ['75050022', '84091212', '78041138', '84030769', '85090287'].includes(p.nrp)
+    ).map((p) => ({ ...p })),
   },
 ];

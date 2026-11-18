@@ -12,6 +12,7 @@ import {
   DEFAULT_STAMP_CONFIG,
   INITIAL_ARCHIVE_DOCUMENTS,
   INITIAL_PERSONNEL_ROSTER,
+  mergePersonnelByNrp,
 } from './data/defaultData';
 import {
   AppView,
@@ -24,7 +25,8 @@ import { exportSprinToWord } from './utils/exportDoc';
 const STORAGE_KEYS = {
   ACTIVE_DOC: 'siprin_active_doc_v2',
   ARCHIVE: 'siprin_archive_docs_v2',
-  ROSTER: 'siprin_roster_v2',
+  ROSTER: 'siprin_roster_v3',
+  LEGACY_ROSTER_V2: 'siprin_roster_v2',
 };
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -63,9 +65,12 @@ export default function App() {
   const [archiveDocs, setArchiveDocs] = useState<SprinDocument[]>(() =>
     readStorage<SprinDocument[]>(STORAGE_KEYS.ARCHIVE, INITIAL_ARCHIVE_DOCUMENTS).map(normalizeDoc)
   );
-  const [roster, setRoster] = useState<PersonnelRow[]>(() =>
-    readStorage<PersonnelRow[]>(STORAGE_KEYS.ROSTER, INITIAL_PERSONNEL_ROSTER)
-  );
+  const [roster, setRoster] = useState<PersonnelRow[]>(() => {
+    const storedV3 = readStorage<PersonnelRow[] | null>(STORAGE_KEYS.ROSTER, null);
+    if (storedV3 && storedV3.length > 0) return storedV3;
+    const legacyV2 = readStorage<PersonnelRow[]>(STORAGE_KEYS.LEGACY_ROSTER_V2, []);
+    return mergePersonnelByNrp(legacyV2, INITIAL_PERSONNEL_ROSTER);
+  });
 
   // Sync state to localStorage
   useEffect(() => {

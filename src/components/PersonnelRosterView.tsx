@@ -36,15 +36,24 @@ export const PersonnelRosterView: React.FC<PersonnelRosterViewProps> = ({
   const handleAddPerson = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nama.trim() || !nrp.trim()) return;
-    const newPerson: PersonnelRow = {
-      id: `pers-${Date.now()}`,
+    const normalizedNrp = nrp.trim();
+    const existingIndex = roster.findIndex((p) => p.nrp.trim() === normalizedNrp);
+    const updatedData: PersonnelRow = {
+      id: existingIndex >= 0 ? roster[existingIndex].id : `pers-${Date.now()}`,
       nama: nama.trim().toUpperCase(),
       pangkat: pangkat.trim().toUpperCase(),
-      nrp: nrp.trim(),
+      nrp: normalizedNrp,
       jabatan: jabatan.trim().toUpperCase() || 'ANGGOTA',
-      ket: '',
+      ket: existingIndex >= 0 ? roster[existingIndex].ket : '',
     };
-    onChangeRoster([newPerson, ...roster]);
+
+    if (existingIndex >= 0) {
+      const next = [...roster];
+      next[existingIndex] = updatedData;
+      onChangeRoster(next);
+    } else {
+      onChangeRoster([updatedData, ...roster]);
+    }
     setNama('');
     setNrp('');
     setJabatan('');
@@ -61,7 +70,7 @@ export const PersonnelRosterView: React.FC<PersonnelRosterViewProps> = ({
           DATABASE PERSONEL KESATUAN
         </h2>
         <p className="text-sm text-[#A89C89] mt-0.5">
-          Kelola daftar induk personel untuk mempercepat pengisian Lampiran Surat Perintah halaman 2.
+          Kelola daftar induk personel ({roster.length} personel). Jika NRP sudah ada, data lama otomatis ditimpa.
         </p>
       </div>
 
