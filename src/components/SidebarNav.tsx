@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { AppView } from '../types/sprin';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SidebarNavProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ interface SidebarNavProps {
   pageCount?: number;
   onNewBlankSprin: () => void;
   onLoadReferenceTemplate: () => void;
+  onAppInstalled?: () => void;
 }
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
@@ -40,6 +42,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   pageCount,
   onNewBlankSprin,
   onLoadReferenceTemplate,
+  onAppInstalled,
 }) => {
   const navItems: { id: AppView; label: string; count?: number; icon: React.ReactNode }[] = [
     {
@@ -170,10 +173,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-[#C8BCA8] hover:text-[#F5F0E6] bg-transparent hover:bg-[#241D15] border border-[#32291E] transition-colors whitespace-nowrap cursor-pointer"
           >
-              <RotateCcw className="w-4 h-4 text-[#A89C89] shrink-0" />
-              <span>Reset Template Default</span>
-            </button>
-          </div>
+            <RotateCcw className="w-4 h-4 text-[#A89C89] shrink-0" />
+            <span>Reset Template Default</span>
+          </button>
+
+          <PWAInstallButton variant="sidebar" onInstalled={onAppInstalled} />
+        </div>
 
           {/* Active Document Summary Footer */}
           <div className="mt-auto p-4 border-t border-[#32291E] bg-[#15100B]">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileDown, Loader2, Menu, Printer, Save } from 'lucide-react';
 import { QuickWinsEmblem } from './PolriEmblems';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface DashboardHeaderProps {
   onToggleSidebar: () => void;
@@ -9,6 +10,7 @@ interface DashboardHeaderProps {
   onExportPdf: () => void;
   isExportingPdf?: boolean;
   onPrint: () => void;
+  onAppInstalled?: () => void;
   completionPercent: number;
 }
 
@@ -19,6 +21,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onExportPdf,
   isExportingPdf = false,
   onPrint,
+  onAppInstalled,
   completionPercent,
 }) => {
 
@@ -50,6 +53,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
         {/* Right: Actions */}
         <div className="flex flex-wrap items-center gap-2.5 ml-auto">
+          <PWAInstallButton variant="header" onInstalled={onAppInstalled} />
+
           <button
             type="button"
             onClick={onSaveToArchive}

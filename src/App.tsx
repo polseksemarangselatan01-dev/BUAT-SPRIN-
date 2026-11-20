@@ -13,6 +13,7 @@ import {
   useLampiranPages,
 } from './components/LetterPageTwo';
 import { PersonnelRosterView } from './components/PersonnelRosterView';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { SidebarNav } from './components/SidebarNav';
 import { EditorSectionId, SprinEditorForm } from './components/SprinEditorForm';
 import {
@@ -310,6 +311,7 @@ export default function App() {
           onExportPdf={handleExportPdf}
           isExportingPdf={isExportingPdf}
           onPrint={handlePrint}
+          onAppInstalled={() => showToast('Aplikasi SIPRIN Polri berhasil dipasang ke perangkat')}
           completionPercent={completionPercent}
         />
 
@@ -336,6 +338,7 @@ export default function App() {
             pageCount={totalPageCount}
             onNewBlankSprin={handleCreateNewSprin}
             onLoadReferenceTemplate={handleLoadReferenceTemplate}
+            onAppInstalled={() => showToast('Aplikasi SIPRIN Polri berhasil dipasang ke perangkat')}
           />
 
           <main className="flex-1 min-w-0 bg-[#14100C]">
@@ -570,6 +573,8 @@ export default function App() {
             <span>{toastMessage}</span>
           </div>
         )}
+
+        <OfflineIndicator />
       </div>
 
       {/* OFFSCREEN PAGE-BREAK MEASURERS */}
