@@ -24,6 +24,7 @@ import {
 } from 'docx';
 import {
   DEFAULT_STAMP_CONFIG,
+  DEFAULT_STAMP_IMAGE_URL,
   getLampiranHeaderTitle,
   getNormalizedLampiranColWidths,
   getSprinContinuationHeaderTitle,
@@ -222,12 +223,12 @@ function buildDefaultStampSvg(resorText: string, sektorText: string): string {
 }
 
 function buildDefaultSignatureSvg(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 190" width="540" height="285">
-    <path d="M 52,32 L 49,17 C 48,55 44,115 41,160 C 41,165 44,167 46,164" fill="none" stroke="#0A0A0A" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M 31,115 C 31,94 64,74 80,77 C 86,79 68,100 47,112 C 62,107 74,108 82,114 C 89,119 95,116 98,111" fill="none" stroke="#0A0A0A" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M 106,44 L 103,35 C 102,75 106,132 111,172" fill="none" stroke="#0A0A0A" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M 129,108 L 132,81 C 122,87 116,99 120,108 C 125,116 144,118 159,122 C 151,128 140,131 132,131 C 138,125 147,120 155,117" fill="none" stroke="#0A0A0A" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M 131,92 C 143,86 157,84 167,85 C 169,91 163,98 164,102 C 167,104 171,105 173,108 C 218,104 282,105 340,107" fill="none" stroke="#0A0A0A" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 365 195" width="548" height="293">
+    <path d="M 54,32 L 49,17 C 47,58 43,118 40,162 C 40,167 43,169 45,166" fill="none" stroke="#000000" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 31,118 C 31,96 63,75 79,79 C 85,81 69,99 47,113 C 62,108 74,109 82,115 C 89,120 95,118 99,113" fill="none" stroke="#000000" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 109,46 L 104,34 C 103,76 107,134 113,177" fill="none" stroke="#000000" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 134,83 C 122,90 117,104 123,113 C 129,121 146,122 162,126 C 153,133 141,138 134,138 C 141,131 153,125 162,122" fill="none" stroke="#000000" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 134,99 C 144,91 158,86 168,87 C 170,93 164,102 165,107 C 168,110 172,111 175,113 C 222,110 286,111 344,113" fill="none" stroke="#000000" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 }
 
@@ -562,15 +563,17 @@ export async function exportSprinToWord(
   } | null = null;
 
   if (doc.showStampAndSignature) {
-    const stampSource =
-      stampCfg.stampImageDataUrl ||
-      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+    const stampSource = stampCfg.stampImageDataUrl || DEFAULT_STAMP_IMAGE_URL;
+    let rasterStamp = await rasterizeImageUrlToPng(
+      stampSource,
+      Boolean(stampCfg.stampMultiplyBlend)
+    );
+    if (!rasterStamp) {
+      const fallbackSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
         buildDefaultStampSvg(doc.stampResorText, doc.stampSektorText)
       )}`;
-    const rasterStamp = await rasterizeImageUrlToPng(
-      stampSource,
-      Boolean(stampCfg.stampImageDataUrl && stampCfg.stampMultiplyBlend)
-    );
+      rasterStamp = await rasterizeImageUrlToPng(fallbackSvg, false);
+    }
     if (rasterStamp) {
       const sizePx = Math.round(stampCfg.stampSizeCm * PX_PER_CM);
       stampAsset = {

@@ -242,8 +242,10 @@ export const INITIAL_PERSONNEL_ROSTER: PersonnelRow[] = mergePersonnelByNrp(
   NOMINATIF_POLSEK_SMG_SELATAN
 );
 
+export const DEFAULT_STAMP_IMAGE_URL = '/assets/aistudio/NEW_STAMPLE__2__a18bbd20.png';
+
 export const DEFAULT_STAMP_CONFIG: StampSignatureConfig = {
-  stampImageDataUrl: null,
+  stampImageDataUrl: DEFAULT_STAMP_IMAGE_URL,
   stampSizeCm: 4.7,
   stampOffsetXMm: 2,
   stampOffsetYMm: 2,

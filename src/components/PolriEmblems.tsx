@@ -1,4 +1,5 @@
 import React from 'react';
+import { DEFAULT_STAMP_IMAGE_URL } from '../data/defaultData';
 
 /**
  * Dashboard Header Logo — Golden Tribrata Polri Emblem (/assets/aistudio/Logo_Tri_Brata__1___1__7bf85ea6.png)
@@ -214,48 +215,49 @@ export const DefaultStampGraphic: React.FC<{
 export const DefaultSignatureGraphic: React.FC<{ className?: string }> = ({
   className = 'w-full h-auto',
 }) => (
-  <svg viewBox="0 0 360 190" className={className}>
-    {/* Leftmost tall vertical stroke with top & bottom hooks */}
+  <svg viewBox="0 0 365 195" className={className}>
+    {/* Leftmost tall vertical stroke with top tick and bottom J-hook */}
     <path
-      d="M 52,32 L 49,17 C 48,55 44,115 41,160 C 41,165 44,167 46,164"
+      d="M 54,32 L 49,17 C 47,58 43,118 40,162 C 40,167 43,169 45,166"
       fill="none"
-      stroke="#0A0A0A"
-      strokeWidth="3.4"
+      stroke="#000000"
+      strokeWidth="3.6"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    {/* Left R-loop crossing vertical stroke */}
+    {/* Crossing R-loop */}
     <path
-      d="M 31,115 C 31,94 64,74 80,77 C 86,79 68,100 47,112 C 62,107 74,108 82,114 C 89,119 95,116 98,111"
+      d="M 31,118 C 31,96 63,75 79,79 C 85,81 69,99 47,113 C 62,108 74,109 82,115 C 89,120 95,118 99,113"
       fill="none"
-      stroke="#0A0A0A"
-      strokeWidth="3.4"
+      stroke="#000000"
+      strokeWidth="3.6"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     {/* Second tall vertical stroke */}
     <path
-      d="M 106,44 L 103,35 C 102,75 106,132 111,172"
+      d="M 109,46 L 104,34 C 103,76 107,134 113,177"
       fill="none"
-      stroke="#0A0A0A"
-      strokeWidth="3.4"
+      stroke="#000000"
+      strokeWidth="3.6"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    {/* Right cursive cluster & trailing horizontal tail */}
+    {/* Right cursive cluster ("Sm" + lower pointed return loop) */}
     <path
-      d="M 129,108 L 132,81 C 122,87 116,99 120,108 C 125,116 144,118 159,122 C 151,128 140,131 132,131 C 138,125 147,120 155,117"
+      d="M 134,83 C 122,90 117,104 123,113 C 129,121 146,122 162,126 C 153,133 141,138 134,138 C 141,131 153,125 162,122"
       fill="none"
-      stroke="#0A0A0A"
-      strokeWidth="3.4"
+      stroke="#000000"
+      strokeWidth="3.6"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+    {/* Upper arch and long trailing horizontal tail */}
     <path
-      d="M 131,92 C 143,86 157,84 167,85 C 169,91 163,98 164,102 C 167,104 171,105 173,108 C 218,104 282,105 340,107"
+      d="M 134,99 C 144,91 158,86 168,87 C 170,93 164,102 165,107 C 168,110 172,111 175,113 C 222,110 286,111 344,113"
       fill="none"
-      stroke="#0A0A0A"
-      strokeWidth="3.4"
+      stroke="#000000"
+      strokeWidth="3.6"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
@@ -294,6 +296,13 @@ export const PolsekStampAndSignature: React.FC<{
   const sigY = config?.signatureOffsetYMm ?? 14;
   const sigMultiply = config?.signatureMultiplyBlend ?? true;
 
+  const stampImgSrc = config?.stampImageDataUrl || DEFAULT_STAMP_IMAGE_URL;
+  const [stampImgFailed, setStampImgFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setStampImgFailed(false);
+  }, [stampImgSrc]);
+
   const zIndexClass = (config?.aboveText ?? true) ? 'z-20' : 'z-0';
 
   return (
@@ -311,11 +320,12 @@ export const PolsekStampAndSignature: React.FC<{
           mixBlendMode: stampMultiply ? 'multiply' : 'normal',
         }}
       >
-        {config?.stampImageDataUrl ? (
+        {!stampImgFailed ? (
           <img
-            src={config.stampImageDataUrl}
+            src={stampImgSrc}
             alt="Stempel Kesatuan"
             referrerPolicy="no-referrer"
+            onError={() => setStampImgFailed(true)}
             className="w-full h-full object-contain opacity-90"
           />
         ) : (

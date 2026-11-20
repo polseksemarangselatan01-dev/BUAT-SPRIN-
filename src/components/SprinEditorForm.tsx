@@ -20,6 +20,7 @@ import { FullscreenBodyEditorModal, FullscreenBodyTab } from './FullscreenBodyEd
 import {
   DEFAULT_LAMPIRAN_COL_WIDTHS,
   DEFAULT_STAMP_CONFIG,
+  DEFAULT_STAMP_IMAGE_URL,
   getNormalizedLampiranColWidths,
   getSprinContinuationHeaderTitle,
   LAMPIRAN_COL_MIN_WIDTHS,
@@ -33,7 +34,7 @@ import {
   StampSignatureConfig,
 } from '../types/sprin';
 import { parsePersonnelExcel } from '../utils/importExcel';
-import { DefaultSignatureGraphic, DefaultStampGraphic } from './PolriEmblems';
+import { DefaultSignatureGraphic } from './PolriEmblems';
 
 export type EditorSectionId = 'hal1' | 'hal2' | 'pengesahan' | 'ttd';
 
@@ -1183,19 +1184,12 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
             {/* File Import Row */}
             <div className="flex items-center gap-3">
               <div className="w-16 h-16 rounded-lg bg-white border border-[#4A3D2C] flex items-center justify-center p-1 shrink-0 overflow-hidden">
-                {stampCfg.stampImageDataUrl ? (
-                  <img
-                    src={stampCfg.stampImageDataUrl}
-                    alt="Preview Stempel"
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <DefaultStampGraphic
-                    resorText={doc.stampResorText}
-                    sektorText={doc.stampSektorText}
-                    className="w-full h-full"
-                  />
-                )}
+                <img
+                  src={stampCfg.stampImageDataUrl || DEFAULT_STAMP_IMAGE_URL}
+                  alt="Preview Stempel"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain"
+                />
               </div>
 
               <div className="flex-1 space-y-2">
@@ -1218,16 +1212,19 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
                     <Upload className="w-3.5 h-3.5" />
                     <span>Import Gambar Stempel</span>
                   </button>
-                  {stampCfg.stampImageDataUrl && (
-                    <button
-                      type="button"
-                      onClick={() => updateStampConfig('stampImageDataUrl', null)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#2A2218] hover:bg-red-950/60 text-xs font-medium text-[#E5B8B8] cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Pakai Default</span>
-                    </button>
-                  )}
+                  {stampCfg.stampImageDataUrl &&
+                    stampCfg.stampImageDataUrl !== DEFAULT_STAMP_IMAGE_URL && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateStampConfig('stampImageDataUrl', DEFAULT_STAMP_IMAGE_URL)
+                        }
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#2A2218] hover:bg-red-950/60 text-xs font-medium text-[#E5B8B8] cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Pakai Default</span>
+                      </button>
+                    )}
                 </div>
                 <label className="inline-flex items-center gap-2 text-[11px] text-[#B5A894] cursor-pointer">
                   <input

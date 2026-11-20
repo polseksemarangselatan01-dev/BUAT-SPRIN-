@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Eye, Printer, ZoomIn, ZoomOut } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Eye, FileDown, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 import { ArchiveView } from './components/ArchiveView';
 import { DashboardHeader } from './components/DashboardHeader';
 import {
@@ -19,6 +19,7 @@ import {
   DEFAULT_LAMPIRAN_COL_WIDTHS,
   DEFAULT_SPRIN_DOCUMENT,
   DEFAULT_STAMP_CONFIG,
+  DEFAULT_STAMP_IMAGE_URL,
   INITIAL_ARCHIVE_DOCUMENTS,
   INITIAL_PERSONNEL_ROSTER,
   mergePersonnelByNrp,
@@ -30,6 +31,7 @@ import {
   SprinDocument,
 } from './types/sprin';
 import { exportSprinToWord } from './utils/exportDoc';
+import { exportSprinToPdf } from './utils/exportPdf';
 
 const STORAGE_KEYS = {
   ACTIVE_DOC: 'siprin_active_doc_v2',
@@ -81,6 +83,7 @@ function normalizeDoc(doc: SprinDocument): SprinDocument {
     stampConfig: {
       ...DEFAULT_STAMP_CONFIG,
       ...(doc.stampConfig || {}),
+      stampImageDataUrl: doc.stampConfig?.stampImageDataUrl || DEFAULT_STAMP_IMAGE_URL,
     },
   };
 }
@@ -92,6 +95,8 @@ export default function App() {
   const [previewPage, setPreviewPage] = useState<LetterPreviewPage>('both');
   const [zoom, setZoom] = useState<number>(0.72);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const printContainerRef = useRef<HTMLDivElement>(null);
 
   const [activeDoc, setActiveDoc] = useState<SprinDocument>(() =>
     normalizeDoc(readStorage<SprinDocument>(STORAGE_KEYS.ACTIVE_DOC, DEFAULT_SPRIN_DOCUMENT))
@@ -267,8 +272,24 @@ export default function App() {
     setActiveSection(section);
   };
 
+  const handleExportPdf = async () => {
+    if (!printContainerRef.current || isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      const pageCount = await exportSprinToPdf(printContainerRef.current, activeDoc.nomorSprin);
+      showToast(`File .PDF (A4 · ${pageCount} Halaman) berhasil diunduh`);
+    } catch {
+      showToast('Gagal membuat file .PDF. Silakan coba lagi.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
+    if (window.self !== window.top) {
+      showToast('Jika dialog cetak diblokir di mode pratinjau, gunakan tombol "Cetak PDF" untuk mengunduh PDF siap cetak.');
+    }
   };
 
   return (
@@ -286,6 +307,8 @@ export default function App() {
               showToast('Gagal membuat file .DOCX');
             }
           }}
+          onExportPdf={handleExportPdf}
+          isExportingPdf={isExportingPdf}
           onPrint={handlePrint}
           completionPercent={completionPercent}
         />
@@ -529,14 +552,15 @@ export default function App() {
           </main>
         </div>
 
-        {/* Floating Quick Print Button on Mobile */}
+        {/* Floating Quick Export PDF Button on Mobile */}
         <button
           type="button"
-          onClick={handlePrint}
-          aria-label="Cetak Surat Perintah"
-          className="fixed bottom-5 right-5 sm:hidden z-40 w-12 h-12 rounded-full bg-[#D4A017] text-[#14100C] shadow-xl flex items-center justify-center cursor-pointer"
+          onClick={handleExportPdf}
+          disabled={isExportingPdf}
+          aria-label="Cetak PDF Surat Perintah"
+          className="fixed bottom-5 right-5 sm:hidden z-40 w-12 h-12 rounded-full bg-[#D4A017] text-[#14100C] shadow-xl flex items-center justify-center cursor-pointer disabled:opacity-60"
         >
-          <Printer className="w-5 h-5" />
+          {isExportingPdf ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileDown className="w-5 h-5" />}
         </button>
 
         {/* Non-blocking Toast */}
@@ -552,8 +576,12 @@ export default function App() {
       {measurerNode}
       {lampiranMeasurerNode}
 
-      {/* DEDICATED PRINT-ONLY CONTAINER (Renders Page 1..N and optional Lampiran pages with header) */}
-      <div className="hidden print-only-container">
+      {/* DEDICATED PRINT & PDF CONTAINER (Unscaled A4 pages for PDF capture and native print) */}
+      <div
+        ref={printContainerRef}
+        aria-hidden="true"
+        className="fixed -left-[99999px] top-0 pointer-events-none select-none print-only-container"
+      >
         {pageOneSlices.map((slice, sIdx) => {
           const sliceCatchword =
             sIdx === 0 && (activeDoc.kataSambung || '').trim()
@@ -570,7 +598,7 @@ export default function App() {
             />
           );
         })}
-        {activeDoc.useLampiran &&
+        {(activeDoc.useLampiran || activeDoc.personelList.length > 5) &&
           lampiranPages.map((chunk, pIdx) => {
             const chunkCatchword =
               pIdx < lampiranPages.length - 1
