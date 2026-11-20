@@ -1,1 +1,11 @@
 
+{
+  "appId": "id.polri.siprin",
+  "appName": "SIPRIN POLRI",
+  "webDir": "dist",
+  "backgroundColor": "#1B150F",
+  "android": {
+    "allowMixedContent": false
+  }
+}
+
