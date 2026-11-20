@@ -3,11 +3,14 @@ import {
   BorderStyle,
   convertMillimetersToTwip,
   Document,
+  Footer,
+  Header,
   HorizontalPositionRelativeFrom,
   ImageRun,
   Packer,
-  PageBreak,
+  PageNumber,
   Paragraph,
+  SectionType,
   Table,
   TableCell,
   TableLayoutType,
@@ -19,7 +22,12 @@ import {
   VerticalPositionRelativeFrom,
   WidthType,
 } from 'docx';
-import { DEFAULT_STAMP_CONFIG } from '../data/defaultData';
+import {
+  DEFAULT_STAMP_CONFIG,
+  getLampiranHeaderTitle,
+  getNormalizedLampiranColWidths,
+  getSprinContinuationHeaderTitle,
+} from '../data/defaultData';
 import { SprinDocument, StampSignatureConfig } from '../types/sprin';
 
 const FONT_FAMILY = 'Arial';
@@ -61,7 +69,7 @@ function run(
 }
 
 function para(
-  children: (TextRun | ImageRun | PageBreak)[] | string,
+  children: (TextRun | ImageRun)[] | string,
   opts?: {
     alignment?: (typeof AlignmentType)[keyof typeof AlignmentType];
     spaceBefore?: number;
@@ -247,14 +255,43 @@ function buildKopTable(doc: SprinDocument): Table {
   });
 }
 
+function measureArial12WidthMm(text: string): number {
+  const clean = text.trim();
+  if (!clean) return 0;
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.font = '16px Arial, Helvetica, sans-serif';
+      const px = ctx.measureText(clean).width;
+      return (px * 25.4) / 96;
+    }
+  } catch {
+    // fallback if canvas unavailable
+  }
+  return clean.length * 2.7;
+}
+
 function buildSignatureBlockTable(
   doc: SprinDocument,
-  tanggalLabel: string,
   tanggalValue: string,
   stampAsset: { data: Uint8Array; widthPx: number; heightPx: number; offsetXMm: number; offsetYMm: number } | null,
   sigAsset: { data: Uint8Array; widthPx: number; heightPx: number; offsetXMm: number; offsetYMm: number } | null,
-  aboveText: boolean
+  aboveText: boolean,
+  includeTembusan: boolean
 ): Table {
+  const singleLineJabatan = doc.pejabatJabatan.replace(/\s+/g, ' ').trim();
+  const jabMeasuredMm = measureArial12WidthMm(singleLineJabatan);
+  const namaMeasuredMm = Math.max(
+    measureArial12WidthMm(doc.pejabatNama.toUpperCase()),
+    measureArial12WidthMm(doc.pejabatPangkatNrp.toUpperCase())
+  );
+  const jabatanWidthMm = Math.min(170, Math.max(76, Math.ceil(jabMeasuredMm + 4)));
+  const namaBlockWidthMm = Math.min(jabatanWidthMm, Math.max(66, Math.ceil(namaMeasuredMm + 6)));
+  const rightPadMm = Math.max(0, +((jabatanWidthMm - namaBlockWidthMm) / 2).toFixed(1));
+  const leftTembusanWidthMm = +(170 - namaBlockWidthMm - rightPadMm).toFixed(1);
+  const overlayShiftXMm = (jabatanWidthMm - 98) / 2;
+
   const spacerRuns: (TextRun | ImageRun)[] = [run(' ')];
 
   if (stampAsset) {
@@ -269,7 +306,7 @@ function buildSignatureBlockTable(
         floating: {
           horizontalPosition: {
             relative: HorizontalPositionRelativeFrom.COLUMN,
-            offset: Math.round(stampAsset.offsetXMm * EMU_PER_MM),
+            offset: Math.round((stampAsset.offsetXMm + overlayShiftXMm) * EMU_PER_MM),
           },
           verticalPosition: {
             relative: VerticalPositionRelativeFrom.PARAGRAPH,
@@ -295,7 +332,7 @@ function buildSignatureBlockTable(
         floating: {
           horizontalPosition: {
             relative: HorizontalPositionRelativeFrom.COLUMN,
-            offset: Math.round(sigAsset.offsetXMm * EMU_PER_MM),
+            offset: Math.round((sigAsset.offsetXMm + overlayShiftXMm) * EMU_PER_MM),
           },
           verticalPosition: {
             relative: VerticalPositionRelativeFrom.PARAGRAPH,
@@ -309,92 +346,99 @@ function buildSignatureBlockTable(
     );
   }
 
-  const labelColWidth = convertMillimetersToTwip(34);
+  const labelColWidth = convertMillimetersToTwip(32);
   const colonColWidth = convertMillimetersToTwip(4);
-  const valColWidth = convertMillimetersToTwip(50);
+  const valColWidth = convertMillimetersToTwip(52);
 
-  return new Table({
-    width: { size: convertMillimetersToTwip(175), type: WidthType.DXA },
+  const tembusanChildren: Paragraph[] =
+    includeTembusan && doc.tembusanList.length > 0
+      ? [
+          para('Tembusan:', { spaceAfter: 40 }),
+          ...doc.tembusanList.map((item, idx) => para(`${idx + 1}. ${item}`)),
+        ]
+      : [para('')];
+
+  const dikeluarkanTable = new Table({
+    width: { size: convertMillimetersToTwip(88), type: WidthType.DXA },
     layout: TableLayoutType.FIXED,
+    alignment: AlignmentType.CENTER,
     rows: [
       new TableRow({
         children: [
           new TableCell({
-            width: { size: convertMillimetersToTwip(77), type: WidthType.DXA },
+            width: { size: labelColWidth, type: WidthType.DXA },
             borders: NO_BORDERS,
-            children: [para('')],
+            children: [para('Dikeluarkan di')],
           }),
           new TableCell({
-            width: { size: convertMillimetersToTwip(98), type: WidthType.DXA },
+            width: { size: colonColWidth, type: WidthType.DXA },
             borders: NO_BORDERS,
+            children: [para(':')],
+          }),
+          new TableCell({
+            width: { size: valColWidth, type: WidthType.DXA },
+            borders: NO_BORDERS,
+            children: [para(doc.dikeluarkanDi)],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: labelColWidth, type: WidthType.DXA },
+            borders: {
+              ...NO_BORDERS,
+              bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            },
+            children: [para('pada tanggal')],
+          }),
+          new TableCell({
+            width: { size: colonColWidth, type: WidthType.DXA },
+            borders: {
+              ...NO_BORDERS,
+              bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            },
+            children: [para(':')],
+          }),
+          new TableCell({
+            width: { size: valColWidth, type: WidthType.DXA },
+            borders: {
+              ...NO_BORDERS,
+              bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            },
+            children: [para(tanggalValue)],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  const namaPangkatTable = new Table({
+    layout: TableLayoutType.AUTOFIT,
+    alignment: AlignmentType.CENTER,
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: {
+              ...NO_BORDERS,
+              bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            },
+            margins: { top: 0, bottom: 20, left: 40, right: 40 },
             children: [
-              // Dikeluarkan di / Pada tanggal nested mini-table for neat colon alignment
-              new Table({
-                width: { size: convertMillimetersToTwip(88), type: WidthType.DXA },
-                layout: TableLayoutType.FIXED,
-                alignment: AlignmentType.CENTER,
-                rows: [
-                  new TableRow({
-                    children: [
-                      new TableCell({
-                        width: { size: labelColWidth, type: WidthType.DXA },
-                        borders: NO_BORDERS,
-                        children: [para('Dikeluarkan di')],
-                      }),
-                      new TableCell({
-                        width: { size: colonColWidth, type: WidthType.DXA },
-                        borders: NO_BORDERS,
-                        children: [para(':')],
-                      }),
-                      new TableCell({
-                        width: { size: valColWidth, type: WidthType.DXA },
-                        borders: NO_BORDERS,
-                        children: [para(doc.dikeluarkanDi)],
-                      }),
-                    ],
-                  }),
-                  new TableRow({
-                    children: [
-                      new TableCell({
-                        width: { size: labelColWidth, type: WidthType.DXA },
-                        borders: {
-                          ...NO_BORDERS,
-                          bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                        },
-                        children: [para(tanggalLabel)],
-                      }),
-                      new TableCell({
-                        width: { size: colonColWidth, type: WidthType.DXA },
-                        borders: {
-                          ...NO_BORDERS,
-                          bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                        },
-                        children: [para(':')],
-                      }),
-                      new TableCell({
-                        width: { size: valColWidth, type: WidthType.DXA },
-                        borders: {
-                          ...NO_BORDERS,
-                          bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-                        },
-                        children: [para(tanggalValue)],
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-              para(doc.pejabatJabatan, {
-                alignment: AlignmentType.CENTER,
-                spaceBefore: 80,
-              }),
-              para(spacerRuns, {
-                alignment: AlignmentType.CENTER,
-                spaceBefore: 480,
-                spaceAfter: 480,
-              }),
-              para([run(doc.pejabatNama.toUpperCase(), { underline: true })], {
+              para(doc.pejabatNama.toUpperCase(), {
                 alignment: AlignmentType.CENTER,
               }),
+            ],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: NO_BORDERS,
+            margins: { top: 20, bottom: 0, left: 0, right: 0 },
+            children: [
               para(doc.pejabatPangkatNrp.toUpperCase(), {
                 alignment: AlignmentType.CENTER,
               }),
@@ -404,10 +448,98 @@ function buildSignatureBlockTable(
       }),
     ],
   });
+
+  const row1SpacerMm = +(170 - jabatanWidthMm).toFixed(1);
+  const row1Cells: TableCell[] =
+    row1SpacerMm > 0.5
+      ? [
+          new TableCell({
+            width: { size: convertMillimetersToTwip(row1SpacerMm), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [para('')],
+          }),
+          new TableCell({
+            columnSpan: 2,
+            width: { size: convertMillimetersToTwip(jabatanWidthMm), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [
+              dikeluarkanTable,
+              para(singleLineJabatan, {
+                alignment: AlignmentType.RIGHT,
+                spaceBefore: 120,
+              }),
+              para(spacerRuns, {
+                alignment: AlignmentType.CENTER,
+                spaceBefore: 420,
+                spaceAfter: 420,
+              }),
+            ],
+          }),
+        ]
+      : [
+          new TableCell({
+            columnSpan: 3,
+            width: { size: convertMillimetersToTwip(170), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [
+              dikeluarkanTable,
+              para(singleLineJabatan, {
+                alignment: AlignmentType.RIGHT,
+                spaceBefore: 120,
+              }),
+              para(spacerRuns, {
+                alignment: AlignmentType.CENTER,
+                spaceBefore: 420,
+                spaceAfter: 420,
+              }),
+            ],
+          }),
+        ];
+
+  const row2Cells: TableCell[] = [
+    new TableCell({
+      width: { size: convertMillimetersToTwip(leftTembusanWidthMm), type: WidthType.DXA },
+      borders: NO_BORDERS,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      children: tembusanChildren,
+    }),
+    new TableCell({
+      width: { size: convertMillimetersToTwip(namaBlockWidthMm), type: WidthType.DXA },
+      borders: NO_BORDERS,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      children: [namaPangkatTable],
+    }),
+    ...(rightPadMm > 0
+      ? [
+          new TableCell({
+            width: { size: convertMillimetersToTwip(rightPadMm), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+            children: [para('')],
+          }),
+        ]
+      : []),
+  ];
+
+  return new Table({
+    width: { size: convertMillimetersToTwip(170), type: WidthType.DXA },
+    layout: TableLayoutType.FIXED,
+    rows: [
+      new TableRow({ children: row1Cells }),
+      new TableRow({ children: row2Cells }),
+    ],
+  });
 }
 
-export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
+export async function exportSprinToWord(
+  doc: SprinDocument,
+  autoCatchword?: string
+): Promise<void> {
   const tribrataBytes = await fetchPngBytes('/assets/aistudio/tb__1__e5e5aec3.png');
+  const effectiveCatchword = (doc.kataSambung || '').trim() || (autoCatchword || '').trim();
 
   const stampCfg: StampSignatureConfig = {
     ...DEFAULT_STAMP_CONFIG,
@@ -470,12 +602,12 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
     }
   }
 
-  // Body column widths (total printable width = 210 - 20 - 15 = 175 mm)
+  // Body column widths (total printable width = 210 - 25 - 15 = 170 mm)
   const labelW = convertMillimetersToTwip(32);
   const colonW = convertMillimetersToTwip(5);
-  const contentW = convertMillimetersToTwip(138);
+  const contentW = convertMillimetersToTwip(133);
   const numSubW = convertMillimetersToTwip(7);
-  const textSubW = convertMillimetersToTwip(131);
+  const textSubW = convertMillimetersToTwip(126);
 
   // Dasar cell content
   const dasarCellChildren: (Paragraph | Table)[] =
@@ -507,18 +639,29 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
           }),
         ];
 
-  // Kepada cell content
+  const formatKepadaJabatan = (jabatan: string): string => {
+    const clean = jabatan.trim().toUpperCase();
+    if (!clean) return 'POLSEK SMG SELATAN';
+    if (clean.includes('POLSEK SMG SELATAN') || clean.includes('POLSEK SEMARANG SELATAN')) {
+      return clean;
+    }
+    return `${clean} POLSEK SMG SELATAN`;
+  };
+
+  const useLampiranEffective = doc.useLampiran || doc.personelList.length > 5;
+
+  // Kepada cell content (maksimal 5 personel langsung; > 5 pakai lampiran)
   let kepadaCellChildren: (Paragraph | Table)[] = [para(doc.kepadaText.toUpperCase())];
-  if (!doc.useLampiran && doc.personelList.length === 1) {
+  if (!useLampiranEffective && doc.personelList.length === 1) {
     const p = doc.personelList[0];
     const line1 = [p.pangkat, p.nama, p.nrp ? `NRP ${p.nrp}` : '']
       .filter(Boolean)
       .join(' ')
       .toUpperCase();
     kepadaCellChildren = [para([run(line1, { underline: true })])];
-    if (p.jabatan) kepadaCellChildren.push(para(p.jabatan.toUpperCase()));
+    kepadaCellChildren.push(para(formatKepadaJabatan(p.jabatan)));
     if (p.ket) kepadaCellChildren.push(para(p.ket.toUpperCase()));
-  } else if (!doc.useLampiran && doc.personelList.length > 1) {
+  } else if (!useLampiranEffective && doc.personelList.length > 1) {
     kepadaCellChildren = [
       new Table({
         width: { size: contentW, type: WidthType.DXA },
@@ -529,7 +672,7 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
             .join(' ')
             .toUpperCase();
           const pParas: Paragraph[] = [para([run(line1, { underline: true })])];
-          if (p.jabatan) pParas.push(para(p.jabatan.toUpperCase()));
+          pParas.push(para(formatKepadaJabatan(p.jabatan)));
           if (p.ket) pParas.push(para(p.ket.toUpperCase()));
           return new TableRow({
             children: [
@@ -574,7 +717,7 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
   });
 
   const bodyTable = new Table({
-    width: { size: convertMillimetersToTwip(175), type: WidthType.DXA },
+    width: { size: convertMillimetersToTwip(170), type: WidthType.DXA },
     layout: TableLayoutType.FIXED,
     rows: [
       new TableRow({
@@ -687,6 +830,39 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
     ],
   });
 
+  const titleNomorTable = new Table({
+    layout: TableLayoutType.AUTOFIT,
+    alignment: AlignmentType.CENTER,
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: {
+              ...NO_BORDERS,
+              bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+            },
+            margins: { top: 0, bottom: 20, left: 40, right: 40 },
+            children: [para('SURAT PERINTAH', { alignment: AlignmentType.CENTER })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: NO_BORDERS,
+            margins: { top: 20, bottom: 0, left: 0, right: 0 },
+            children: [
+              para(`Nomor: ${doc.nomorSprin}`, {
+                alignment: AlignmentType.CENTER,
+                spaceAfter: 240,
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+
   const pageOneChildren: (Paragraph | Table)[] = [
     buildKopTable(doc),
     ...(tribrataBytes
@@ -696,70 +872,33 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
               new ImageRun({
                 type: 'png',
                 data: tribrataBytes,
-                transformation: { width: 58, height: 54 },
+                transformation: { width: 56, height: 52 },
               }),
             ],
-            { alignment: AlignmentType.CENTER, spaceBefore: 100, spaceAfter: 60 }
+            { alignment: AlignmentType.CENTER, spaceBefore: 140, spaceAfter: 100 }
           ),
         ]
       : []),
-    para([run('SURAT PERINTAH', { underline: true })], {
-      alignment: AlignmentType.CENTER,
-    }),
-    para(`Nomor : ${doc.nomorSprin}`, {
-      alignment: AlignmentType.CENTER,
-      spaceAfter: 200,
-    }),
+    titleNomorTable,
     bodyTable,
-    para('', { spaceBefore: 160 }),
+    para('', { spaceBefore: 200 }),
     buildSignatureBlockTable(
       doc,
-      doc.useLampiran ? 'Pada tanggal' : 'pada tanggal',
       doc.tanggalSuratHal1,
       stampAsset,
       sigAsset,
-      stampCfg.aboveText
+      stampCfg.aboveText,
+      true
     ),
-    para('Tembusan:', { spaceBefore: 180, spaceAfter: 60 }),
-    ...doc.tembusanList.map((item, idx) => para(`${idx + 1}. ${item}`)),
   ];
 
-  // Optional Page 2 (Lampiran)
+  // Optional Section 2 (Lampiran — Kop Surat sejajar header LAMP SPRIN ... pada halaman pertama lampiran)
   const pageTwoChildren: (Paragraph | Table)[] = [];
-  if (doc.useLampiran) {
-    pageTwoChildren.push(para([new PageBreak()]));
-
-    pageTwoChildren.push(
-      new Table({
-        width: { size: convertMillimetersToTwip(175), type: WidthType.DXA },
-        layout: TableLayoutType.FIXED,
-        rows: [
-          new TableRow({
-            children: [
-              new TableCell({
-                width: { size: convertMillimetersToTwip(83), type: WidthType.DXA },
-                borders: NO_BORDERS,
-                children: [buildKopTable(doc)],
-              }),
-              new TableCell({
-                width: { size: convertMillimetersToTwip(92), type: WidthType.DXA },
-                borders: NO_BORDERS,
-                children: [
-                  para(doc.lampiranHeaderTitle, { borderBottom: true }),
-                  para(`NOMOR   : ${doc.lampiranNomor}`, { borderBottom: true }),
-                  para(`TANGGAL : ${doc.lampiranTanggalUpper}`, { borderBottom: true }),
-                ],
-              }),
-            ],
-          }),
-        ],
-      })
-    );
-
+  if (useLampiranEffective) {
     pageTwoChildren.push(
       para(doc.lampiranJudul.toUpperCase(), {
         alignment: AlignmentType.CENTER,
-        spaceBefore: 240,
+        spaceBefore: 120,
       }),
       para([run(doc.lampiranSubjudul.toUpperCase(), { underline: true })], {
         alignment: AlignmentType.CENTER,
@@ -767,13 +906,14 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
       })
     );
 
+    const normWidths = getNormalizedLampiranColWidths(doc.lampiranColWidths);
     const colWidths = [
-      convertMillimetersToTwip(11),
-      convertMillimetersToTwip(43),
-      convertMillimetersToTwip(26),
-      convertMillimetersToTwip(26),
-      convertMillimetersToTwip(53),
-      convertMillimetersToTwip(16),
+      convertMillimetersToTwip(normWidths.no),
+      convertMillimetersToTwip(normWidths.nama),
+      convertMillimetersToTwip(normWidths.pangkat),
+      convertMillimetersToTwip(normWidths.nrp),
+      convertMillimetersToTwip(normWidths.jabatan),
+      convertMillimetersToTwip(normWidths.ket),
     ];
 
     const headerTitles = ['NO', 'NAMA', 'PANGKAT', 'NRP', 'JABATAN', 'KET'];
@@ -830,24 +970,202 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
 
     pageTwoChildren.push(
       new Table({
-        width: { size: convertMillimetersToTwip(175), type: WidthType.DXA },
+        width: { size: convertMillimetersToTwip(170), type: WidthType.DXA },
         layout: TableLayoutType.FIXED,
         rows: [headerRow1, headerRow2, ...personnelTableRows],
       })
     );
 
     pageTwoChildren.push(
-      para('', { spaceBefore: 160 }),
+      para('', { spaceBefore: 200 }),
       buildSignatureBlockTable(
         doc,
-        'Pada tanggal',
         doc.tanggalSuratHal2,
         stampAsset,
         sigAsset,
-        stampCfg.aboveText
+        stampCfg.aboveText,
+        false
       )
     );
   }
+
+  const sprinHeaderTitle = getSprinContinuationHeaderTitle(doc);
+  const lampiranHeaderTitle = getLampiranHeaderTitle(doc);
+  const headerNomor = (doc.lampiranNomor || doc.nomorSprin.toUpperCase()).trim();
+  const headerTanggal = (
+    doc.lampiranTanggalUpper ||
+    doc.tanggalSuratHal1.replace(/\s+/g, ' ').trim().toUpperCase()
+  ).trim();
+
+  const headerBottomBorders = {
+    ...NO_BORDERS,
+    bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+  };
+
+  const buildHeaderBlockRows = (titleText: string): TableRow[] => [
+    new TableRow({
+      children: [
+        new TableCell({
+          columnSpan: 3,
+          width: { size: convertMillimetersToTwip(84), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 0, bottom: 15, left: 0, right: 0 },
+          children: [para(titleText)],
+        }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        new TableCell({
+          width: { size: convertMillimetersToTwip(22), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 15, bottom: 15, left: 0, right: 0 },
+          children: [para('NOMOR')],
+        }),
+        new TableCell({
+          width: { size: convertMillimetersToTwip(3), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 15, bottom: 15, left: 0, right: 0 },
+          children: [para(':')],
+        }),
+        new TableCell({
+          width: { size: convertMillimetersToTwip(59), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 15, bottom: 15, left: 0, right: 0 },
+          children: [para(headerNomor)],
+        }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        new TableCell({
+          width: { size: convertMillimetersToTwip(22), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 15, bottom: 15, left: 0, right: 0 },
+          children: [para('TANGGAL')],
+        }),
+        new TableCell({
+          width: { size: convertMillimetersToTwip(3), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 15, bottom: 15, left: 0, right: 0 },
+          children: [para(':')],
+        }),
+        new TableCell({
+          width: { size: convertMillimetersToTwip(59), type: WidthType.DXA },
+          borders: headerBottomBorders,
+          margins: { top: 15, bottom: 15, left: 0, right: 0 },
+          children: [para(headerTanggal)],
+        }),
+      ],
+    }),
+  ];
+
+  const buildCenteredPageNumberPara = (): Paragraph =>
+    para(
+      [
+        new TextRun({
+          children: [PageNumber.CURRENT],
+          font: FONT_FAMILY,
+          size: FONT_SIZE_12PT,
+          color: '000000',
+        }),
+      ],
+      { alignment: AlignmentType.CENTER }
+    );
+
+  const buildTopRightHeader = (titleText: string): Header =>
+    new Header({
+      children: [
+        new Table({
+          width: { size: convertMillimetersToTwip(170), type: WidthType.DXA },
+          layout: TableLayoutType.FIXED,
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: convertMillimetersToTwip(74), type: WidthType.DXA },
+                  borders: NO_BORDERS,
+                  children: [para('')],
+                }),
+                new TableCell({
+                  width: { size: convertMillimetersToTwip(12), type: WidthType.DXA },
+                  borders: NO_BORDERS,
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                  children: [buildCenteredPageNumberPara()],
+                }),
+                new TableCell({
+                  width: { size: convertMillimetersToTwip(84), type: WidthType.DXA },
+                  borders: NO_BORDERS,
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                  children: [
+                    new Table({
+                      width: { size: convertMillimetersToTwip(84), type: WidthType.DXA },
+                      layout: TableLayoutType.FIXED,
+                      rows: buildHeaderBlockRows(titleText),
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+
+  const buildLampiranFirstPageHeader = (): Header =>
+    new Header({
+      children: [
+        new Table({
+          width: { size: convertMillimetersToTwip(170), type: WidthType.DXA },
+          layout: TableLayoutType.FIXED,
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: convertMillimetersToTwip(74), type: WidthType.DXA },
+                  borders: NO_BORDERS,
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                  children: [buildKopTable(doc)],
+                }),
+                new TableCell({
+                  width: { size: convertMillimetersToTwip(12), type: WidthType.DXA },
+                  borders: NO_BORDERS,
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                  children: [buildCenteredPageNumberPara()],
+                }),
+                new TableCell({
+                  width: { size: convertMillimetersToTwip(84), type: WidthType.DXA },
+                  borders: NO_BORDERS,
+                  margins: { top: 0, bottom: 0, left: 0, right: 0 },
+                  children: [
+                    new Table({
+                      width: { size: convertMillimetersToTwip(84), type: WidthType.DXA },
+                      layout: TableLayoutType.FIXED,
+                      rows: buildHeaderBlockRows(lampiranHeaderTitle),
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+
+  const a4PageProperties = {
+    size: {
+      width: convertMillimetersToTwip(210),
+      height: convertMillimetersToTwip(297),
+    },
+    margin: {
+      top: convertMillimetersToTwip(20),
+      right: convertMillimetersToTwip(15),
+      bottom: convertMillimetersToTwip(15),
+      left: convertMillimetersToTwip(25),
+      header: convertMillimetersToTwip(20),
+      footer: convertMillimetersToTwip(6),
+    },
+  };
 
   const wordDoc = new Document({
     styles: {
@@ -871,21 +1189,44 @@ export async function exportSprinToWord(doc: SprinDocument): Promise<void> {
     sections: [
       {
         properties: {
-          page: {
-            size: {
-              width: convertMillimetersToTwip(210),
-              height: convertMillimetersToTwip(297),
-            },
-            margin: {
-              top: convertMillimetersToTwip(20),
-              right: convertMillimetersToTwip(15),
-              bottom: convertMillimetersToTwip(15),
-              left: convertMillimetersToTwip(20),
-            },
-          },
+          titlePage: true,
+          page: a4PageProperties,
         },
-        children: [...pageOneChildren, ...pageTwoChildren],
+        headers: {
+          first: new Header({ children: [] }),
+          default: buildTopRightHeader(sprinHeaderTitle),
+        },
+        ...(effectiveCatchword
+          ? {
+              footers: {
+                first: new Footer({
+                  children: [para(effectiveCatchword, { alignment: AlignmentType.RIGHT })],
+                }),
+                default: new Footer({ children: [] }),
+              },
+            }
+          : {}),
+        children: pageOneChildren,
       },
+      ...(useLampiranEffective
+        ? [
+            {
+              properties: {
+                type: SectionType.NEXT_PAGE,
+                titlePage: true,
+                page: {
+                  ...a4PageProperties,
+                  pageNumbers: { start: 1 },
+                },
+              },
+              headers: {
+                first: buildLampiranFirstPageHeader(),
+                default: buildTopRightHeader(lampiranHeaderTitle),
+              },
+              children: pageTwoChildren,
+            },
+          ]
+        : []),
     ],
   });
 

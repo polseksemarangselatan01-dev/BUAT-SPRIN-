@@ -39,6 +39,15 @@ export interface StampSignatureConfig {
   aboveText: boolean;
 }
 
+export interface LampiranColumnWidths {
+  no: number;
+  nama: number;
+  pangkat: number;
+  nrp: number;
+  jabatan: number;
+  ket: number;
+}
+
 export interface SprinDocument {
   id: string;
   status: 'Draft' | 'Siap Cetak' | 'Terbit';
@@ -64,13 +73,16 @@ export interface SprinDocument {
   kepadaText: string;
   untukList: string[];
   tembusanList: string[];
+  kataSambung?: string;
 
-  // Section 3: Lampiran Halaman 2 (opsional bila useLampiran = true)
+  // Section 3: Lampiran & Header Halaman Lanjutan
+  sprinHeaderTitle?: string;
   lampiranHeaderTitle: string;
   lampiranNomor: string;
   lampiranTanggalUpper: string;
   lampiranJudul: string;
   lampiranSubjudul: string;
+  lampiranColWidths?: LampiranColumnWidths;
   personelList: PersonnelRow[];
 
   // Section 4: Pengesahan, Penanda Tangan & Stempel

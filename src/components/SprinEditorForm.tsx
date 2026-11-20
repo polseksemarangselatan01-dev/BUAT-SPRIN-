@@ -3,18 +3,36 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  FileSpreadsheet,
   Layers,
+  Maximize2,
   PenTool,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   Stamp,
   Trash2,
   Upload,
   UserPlus,
   Users,
 } from 'lucide-react';
-import { DEFAULT_STAMP_CONFIG } from '../data/defaultData';
-import { PersonnelRow, SprinDocument, StampSignatureConfig } from '../types/sprin';
+import { FullscreenBodyEditorModal, FullscreenBodyTab } from './FullscreenBodyEditorModal';
+import {
+  DEFAULT_LAMPIRAN_COL_WIDTHS,
+  DEFAULT_STAMP_CONFIG,
+  getNormalizedLampiranColWidths,
+  getSprinContinuationHeaderTitle,
+  LAMPIRAN_COL_MIN_WIDTHS,
+  LAMPIRAN_TABLE_TOTAL_MM,
+  mergePersonnelByNrp,
+} from '../data/defaultData';
+import {
+  LampiranColumnWidths,
+  PersonnelRow,
+  SprinDocument,
+  StampSignatureConfig,
+} from '../types/sprin';
+import { parsePersonnelExcel } from '../utils/importExcel';
 import { DefaultSignatureGraphic, DefaultStampGraphic } from './PolriEmblems';
 
 export type EditorSectionId = 'hal1' | 'hal2' | 'pengesahan' | 'ttd';
@@ -25,6 +43,7 @@ interface SprinEditorFormProps {
   roster: PersonnelRow[];
   activeSection: EditorSectionId;
   onChangeSection: (section: EditorSectionId) => void;
+  autoCatchword?: string;
 }
 
 export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
@@ -33,10 +52,14 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
   roster,
   activeSection,
   onChangeSection,
+  autoCatchword,
 }) => {
   const [showRosterModal, setShowRosterModal] = useState(false);
+  const [fullscreenTab, setFullscreenTab] = useState<FullscreenBodyTab | null>(null);
+  const [excelError, setExcelError] = useState<string | null>(null);
   const stampInputRef = useRef<HTMLInputElement>(null);
   const sigInputRef = useRef<HTMLInputElement>(null);
+  const personnelExcelInputRef = useRef<HTMLInputElement>(null);
 
   const stampCfg: StampSignatureConfig = {
     ...DEFAULT_STAMP_CONFIG,
@@ -80,6 +103,29 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const handlePersonnelExcelImport = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      setExcelError(null);
+      const result = await parsePersonnelExcel(file);
+      if (result.rows.length === 0) {
+        setExcelError('Tidak ada data personel terbaca dari file Excel.');
+        return;
+      }
+      const merged = mergePersonnelByNrp(doc.personelList, result.rows);
+      onChange({
+        ...doc,
+        personelList: merged,
+        useLampiran: doc.useLampiran || merged.length > 5,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      setExcelError(
+        err instanceof Error ? err.message : 'Gagal membaca file Excel (.xlsx/.xls/.csv).'
+      );
+    }
+  };
+
   // List helpers for Dasar, Untuk, Tembusan
   const updateListItem = (
     key: 'dasarList' | 'untukList' | 'tembusanList',
@@ -117,7 +163,13 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
       jabatan: '',
       ket: '',
     };
-    updateField('personelList', [...doc.personelList, newRow]);
+    const nextList = [...doc.personelList, newRow];
+    onChange({
+      ...doc,
+      personelList: nextList,
+      useLampiran: doc.useLampiran || nextList.length > 5,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const addFromRoster = (person: PersonnelRow) => {
@@ -127,7 +179,13 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
       ...person,
       id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
-    updateField('personelList', [...doc.personelList, cloned]);
+    const nextList = [...doc.personelList, cloned];
+    onChange({
+      ...doc,
+      personelList: nextList,
+      useLampiran: doc.useLampiran || nextList.length > 5,
+      updatedAt: new Date().toISOString(),
+    });
   };
 
   const movePersonnel = (index: number, direction: -1 | 1) => {
@@ -144,6 +202,64 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
       'personelList',
       doc.personelList.filter((r) => r.id !== id)
     );
+  };
+
+  const colWidths = getNormalizedLampiranColWidths(doc.lampiranColWidths);
+
+  const LAMPIRAN_COLS_META: { key: keyof LampiranColumnWidths; label: string }[] = [
+    { key: 'no', label: 'NO' },
+    { key: 'nama', label: 'NAMA' },
+    { key: 'pangkat', label: 'PANGKAT' },
+    { key: 'nrp', label: 'NRP' },
+    { key: 'jabatan', label: 'JABATAN' },
+    { key: 'ket', label: 'KET' },
+  ];
+
+  const updateLampiranColWidth = (targetKey: keyof LampiranColumnWidths, rawValue: number) => {
+    if (Number.isNaN(rawValue)) return;
+    const otherKeys = LAMPIRAN_COLS_META.map((c) => c.key).filter((k) => k !== targetKey);
+    const otherMinSum = otherKeys.reduce((s, k) => s + LAMPIRAN_COL_MIN_WIDTHS[k], 0);
+    const minVal = LAMPIRAN_COL_MIN_WIDTHS[targetKey];
+    const maxVal = LAMPIRAN_TABLE_TOTAL_MM - otherMinSum;
+    const targetVal = +Math.max(minVal, Math.min(maxVal, rawValue)).toFixed(1);
+
+    const remainingTotal = LAMPIRAN_TABLE_TOTAL_MM - targetVal;
+    const remainingSlack = remainingTotal - otherMinSum;
+    const currentSlackSum = otherKeys.reduce(
+      (s, k) => s + Math.max(0, colWidths[k] - LAMPIRAN_COL_MIN_WIDTHS[k]),
+      0
+    );
+
+    const nextWidths: LampiranColumnWidths = { ...colWidths, [targetKey]: targetVal };
+    otherKeys.forEach((k) => {
+      const baseMin = LAMPIRAN_COL_MIN_WIDTHS[k];
+      const ratio =
+        currentSlackSum > 0.01
+          ? Math.max(0, colWidths[k] - baseMin) / currentSlackSum
+          : 1 / otherKeys.length;
+      nextWidths[k] = +(baseMin + remainingSlack * ratio).toFixed(1);
+    });
+
+    // Distribute rounding residual onto the widest other column so sum === 170.0 mm
+    const sumNow =
+      nextWidths.no +
+      nextWidths.nama +
+      nextWidths.pangkat +
+      nextWidths.nrp +
+      nextWidths.jabatan +
+      nextWidths.ket;
+    const residual = +(LAMPIRAN_TABLE_TOTAL_MM - sumNow).toFixed(1);
+    if (Math.abs(residual) > 0) {
+      const adjustKey = otherKeys.reduce((best, k) =>
+        nextWidths[k] > nextWidths[best] ? k : best
+      );
+      nextWidths[adjustKey] = +Math.max(
+        LAMPIRAN_COL_MIN_WIDTHS[adjustKey],
+        nextWidths[adjustKey] + residual
+      ).toFixed(1);
+    }
+
+    updateField('lampiranColWidths', nextWidths);
   };
 
   const sections: { id: EditorSectionId; shortLabel: string }[] = [
@@ -184,61 +300,75 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
               1. ISI SURAT PERINTAH (HALAMAN 1)
             </h2>
             <span className="text-xs text-[#9E907A] font-mono-num">
-              {doc.useLampiran ? '2 Hal + Lampiran' : '1 Hal · Tanpa Lampiran'}
+              {doc.useLampiran ? 'Sprin + Lampiran' : 'Tanpa Lampiran'}
             </span>
           </div>
 
           {/* Konsep Format Surat Toggle */}
           <div className="rounded-xl bg-[#15110C] border border-[#3D3225] p-3 space-y-2">
-            <div className="text-xs font-semibold text-[#F5F0E6]">Konsep Format Surat</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold text-[#F5F0E6]">Konsep Format Surat</div>
+              <span className="text-[11px] text-[#9E907A]">Maks 5 pers langsung</span>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                disabled={doc.personelList.length > 5}
                 onClick={() => updateField('useLampiran', false)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                  !doc.useLampiran
-                    ? 'bg-[#D4A017]/20 border-[#D4A017] text-[#F4C94D]'
-                    : 'bg-[#1E1812] border-[#362C21] text-[#A89C89] hover:text-[#F5F0E6]'
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                  doc.personelList.length > 5
+                    ? 'bg-[#19140E] border-[#2C241B] text-[#6D6252] cursor-not-allowed'
+                    : !doc.useLampiran
+                      ? 'bg-[#D4A017]/20 border-[#D4A017] text-[#F4C94D] cursor-pointer'
+                      : 'bg-[#1E1812] border-[#362C21] text-[#A89C89] hover:text-[#F5F0E6] cursor-pointer'
                 }`}
               >
-                Tanpa Lampiran (1 Hal)
+                Tanpa Lampiran (1–5 Pers)
               </button>
               <button
                 type="button"
                 onClick={() => updateField('useLampiran', true)}
                 className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
-                  doc.useLampiran
+                  doc.useLampiran || doc.personelList.length > 5
                     ? 'bg-[#D4A017]/20 border-[#D4A017] text-[#F4C94D]'
                     : 'bg-[#1E1812] border-[#362C21] text-[#A89C89] hover:text-[#F5F0E6]'
                 }`}
               >
-                Dengan Lampiran (2 Hal)
+                Dengan Lampiran (&gt; 5 Pers)
               </button>
             </div>
+            {doc.personelList.length > 5 && (
+              <p className="text-[11px] text-[#D4A017]">
+                Personel berjumlah {doc.personelList.length} (&gt; 5), otomatis menggunakan halaman Lampiran sesuai ketentuan naskah dinas.
+              </p>
+            )}
           </div>
 
           <div className="space-y-3.5">
             <div className="grid grid-cols-1 gap-2.5">
-              <label className="block text-xs font-medium text-[#B5A894]">
-                Kop Surat Kesatuan (3 Baris)
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-[#B5A894]">
+                  Kop Surat Kesatuan (3 Baris)
+                </label>
+                <span className="text-[11px] font-mono-num text-[#9E907A]">Arial 12pt</span>
+              </div>
               <input
                 type="text"
                 value={doc.kopLine1}
                 onChange={(e) => updateField('kopLine1', e.target.value)}
-                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
+                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 font-arial-12 leading-[1.15] text-[#F5F0E6] uppercase"
               />
               <input
                 type="text"
                 value={doc.kopLine2}
                 onChange={(e) => updateField('kopLine2', e.target.value)}
-                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
+                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 font-arial-12 leading-[1.15] text-[#F5F0E6] uppercase"
               />
               <input
                 type="text"
                 value={doc.kopLine3}
                 onChange={(e) => updateField('kopLine3', e.target.value)}
-                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
+                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 font-arial-12 leading-[1.15] text-[#F5F0E6] uppercase"
               />
             </div>
 
@@ -262,56 +392,82 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
               />
             </div>
 
+            {/* Pertimbangan (Mode Layar Penuh) */}
             <div>
-              <label className="block text-xs font-medium text-[#B5A894] mb-1.5">
-                Pertimbangan
-              </label>
-              <textarea
-                rows={3}
-                value={doc.pertimbangan}
-                onChange={(e) => updateField('pertimbangan', e.target.value)}
-                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3.5 py-2.5 text-sm text-[#F5F0E6] leading-relaxed"
-              />
-            </div>
-
-            {/* Dasar List */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-[#B5A894]">Dasar Hukum & Surat</label>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label className="text-xs font-medium text-[#B5A894]">Pertimbangan</label>
                 <button
                   type="button"
-                  onClick={() => addListItem('dasarList', 'Dasar tambahan...')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#D4A017] hover:text-[#F4C94D] cursor-pointer"
+                  onClick={() => setFullscreenTab('pertimbangan')}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#251E16] border border-[#D4A017]/50 hover:border-[#D4A017] text-[11px] font-semibold text-[#F4C94D] transition-colors cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tambah Dasar</span>
+                  <Maximize2 className="w-3 h-3" />
+                  <span>Mode Layar Penuh</span>
                 </button>
               </div>
-              <div className="space-y-2">
-                {doc.dasarList.map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-2">
-                    <span className="font-mono-num text-xs text-[#9E907A] pt-2.5 w-5 shrink-0">
-                      {idx + 1}.
+              <button
+                type="button"
+                onClick={() => setFullscreenTab('pertimbangan')}
+                className="w-full text-left rounded-lg bg-[#15110C] border border-[#3D3225] hover:border-[#D4A017] px-3.5 py-2.5 transition-colors cursor-pointer group"
+              >
+                <p className="text-xs text-[#F5F0E6] leading-relaxed line-clamp-3">
+                  {doc.pertimbangan.trim() || (
+                    <span className="text-[#8C7E69] italic">
+                      Belum diisi — klik untuk mengisi Pertimbangan dalam mode layar penuh...
                     </span>
-                    <textarea
-                      rows={2}
-                      value={item}
-                      onChange={(e) => updateListItem('dasarList', idx, e.target.value)}
-                      className="flex-1 rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] leading-relaxed"
-                    />
-                    {doc.dasarList.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeListItem('dasarList', idx)}
-                        aria-label="Hapus dasar"
-                        className="p-2 text-[#9E907A] hover:text-red-400 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                  )}
+                </p>
+                <div className="mt-2 pt-1.5 border-t border-[#2A2218] flex items-center justify-between text-[11px] text-[#9E907A] group-hover:text-[#F4C94D]">
+                  <span>Klik untuk mengisi dalam mode layar penuh</span>
+                  <span className="font-mono-num">{doc.pertimbangan.length} kar</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Dasar List (Mode Layar Penuh) */}
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label className="text-xs font-medium text-[#B5A894]">
+                  Dasar Hukum &amp; Surat ({doc.dasarList.length})
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addListItem('dasarList', 'Dasar tambahan...');
+                      setFullscreenTab('dasar');
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#D4A017] hover:text-[#F4C94D] cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFullscreenTab('dasar')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#251E16] border border-[#D4A017]/50 hover:border-[#D4A017] text-[11px] font-semibold text-[#F4C94D] transition-colors cursor-pointer"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                    <span>Mode Layar Penuh</span>
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFullscreenTab('dasar')}
+                className="w-full text-left rounded-lg bg-[#15110C] border border-[#3D3225] hover:border-[#D4A017] px-3.5 py-2.5 transition-colors cursor-pointer group space-y-1.5"
+              >
+                {doc.dasarList.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-xs text-[#F5F0E6] leading-relaxed">
+                    <span className="font-mono-num text-[#D4A017] shrink-0">{idx + 1}.</span>
+                    <span className="line-clamp-2">{item}</span>
                   </div>
                 ))}
-              </div>
+                <div className="pt-1.5 border-t border-[#2A2218] flex items-center justify-between text-[11px] text-[#9E907A] group-hover:text-[#F4C94D]">
+                  <span>Klik untuk mengisi &amp; menyusun dasar dalam mode layar penuh</span>
+                  <span className="font-mono-num">{doc.dasarList.length} item</span>
+                </div>
+              </button>
             </div>
 
             {doc.useLampiran ? (
@@ -346,46 +502,50 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
               </div>
             )}
 
-            {/* Untuk List */}
+            {/* Untuk List (Mode Layar Penuh) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
                 <label className="text-xs font-medium text-[#B5A894]">
-                  Untuk (Poin Perintah Tugas)
+                  Untuk (Poin Perintah Tugas) ({doc.untukList.length})
                 </label>
-                <button
-                  type="button"
-                  onClick={() => addListItem('untukList', 'Poin perintah tugas baru;')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#D4A017] hover:text-[#F4C94D] cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Tambah Poin</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addListItem('untukList', 'Poin perintah tugas baru;');
+                      setFullscreenTab('untuk');
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#D4A017] hover:text-[#F4C94D] cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFullscreenTab('untuk')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#251E16] border border-[#D4A017]/50 hover:border-[#D4A017] text-[11px] font-semibold text-[#F4C94D] transition-colors cursor-pointer"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                    <span>Mode Layar Penuh</span>
+                  </button>
+                </div>
               </div>
-              <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setFullscreenTab('untuk')}
+                className="w-full text-left rounded-lg bg-[#15110C] border border-[#3D3225] hover:border-[#D4A017] px-3.5 py-2.5 transition-colors cursor-pointer group space-y-1.5"
+              >
                 {doc.untukList.map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-2">
-                    <span className="font-mono-num text-xs text-[#9E907A] pt-2.5 w-5 shrink-0">
-                      {idx + 1}.
-                    </span>
-                    <textarea
-                      rows={2}
-                      value={item}
-                      onChange={(e) => updateListItem('untukList', idx, e.target.value)}
-                      className="flex-1 rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] leading-relaxed"
-                    />
-                    {doc.untukList.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeListItem('untukList', idx)}
-                        aria-label="Hapus poin untuk"
-                        className="p-2 text-[#9E907A] hover:text-red-400 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                  <div key={idx} className="flex items-start gap-2 text-xs text-[#F5F0E6] leading-relaxed">
+                    <span className="font-mono-num text-[#D4A017] shrink-0">{idx + 1}.</span>
+                    <span className="line-clamp-2">{item}</span>
                   </div>
                 ))}
-              </div>
+                <div className="pt-1.5 border-t border-[#2A2218] flex items-center justify-between text-[11px] text-[#9E907A] group-hover:text-[#F4C94D]">
+                  <span>Klik untuk mengisi &amp; menyusun poin perintah dalam mode layar penuh</span>
+                  <span className="font-mono-num">{doc.untukList.length} poin</span>
+                </div>
+              </button>
             </div>
 
             {/* Tembusan List */}
@@ -427,6 +587,37 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
                 ))}
               </div>
             </div>
+
+            {/* Kata Sambung (Catchword) */}
+            <div className="pt-2 border-t border-[#32291E]">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label className="text-xs font-medium text-[#B5A894]">
+                  Kata Sambung Halaman Berikutnya (Opsional)
+                </label>
+                {(doc.kataSambung || '').trim() !== '' && (
+                  <button
+                    type="button"
+                    onClick={() => updateField('kataSambung', '')}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#D4A017] hover:text-[#F4C94D] cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Gunakan Otomatis</span>
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                value={doc.kataSambung ?? ''}
+                onChange={(e) => updateField('kataSambung', e.target.value)}
+                placeholder="Otomatis saat > 1 halaman (misal: 4. melaporkan .....)"
+                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6]"
+              />
+              <p className="text-[11px] text-[#9E907A] mt-1">
+                {autoCatchword
+                  ? `Otomatis terdeteksi: "${autoCatchword}"`
+                  : 'Ditampilkan di kanan bawah halaman yang bersambung ke halaman berikutnya.'}
+              </p>
+            </div>
           </div>
         </section>
       )}
@@ -437,7 +628,7 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-display text-lg font-bold tracking-wide text-[#F7F2E8] uppercase">
               {doc.useLampiran
-                ? '2. LAMPIRAN PERSONEL (HALAMAN 2)'
+                ? '2. LAMPIRAN PERSONEL'
                 : '2. PERSONEL YANG DIPERINTAHKAN (KEPADA)'}
             </h2>
             <span className="text-xs text-[#9E907A] font-mono-num">
@@ -445,45 +636,70 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
             </span>
           </div>
 
-          {doc.useLampiran && (
-            <div className="space-y-3">
+          <div className="rounded-xl bg-[#15110C] border border-[#3D3225] p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[#F5F0E6]">
+                Header Kanan Atas (Halaman 2+)
+              </span>
+              <span className="text-[11px] text-[#9E907A]">
+                Muncul otomatis setelah halaman 1
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#B5A894] mb-1">
+                Judul Header Lanjutan Isi Sprin (Hal. 2+ Surat)
+              </label>
+              <input
+                type="text"
+                value={doc.sprinHeaderTitle ?? ''}
+                onChange={(e) => updateField('sprinHeaderTitle', e.target.value)}
+                placeholder={`Otomatis: ${getSprinContinuationHeaderTitle({ lampiranHeaderTitle: doc.lampiranHeaderTitle })}`}
+                className="w-full rounded-lg bg-[#1E1812] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#B5A894] mb-1">
+                Judul Header Halaman Lampiran
+              </label>
+              <input
+                type="text"
+                value={doc.lampiranHeaderTitle}
+                onChange={(e) => updateField('lampiranHeaderTitle', e.target.value)}
+                placeholder="LAMP SPRIN KAPOLSEK SMG SELATAN"
+                className="w-full rounded-lg bg-[#1E1812] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#B5A894] mb-1">
-                  Keterangan Lampiran Kanan Atas
+                  Nomor Header (Hal. 2+)
                 </label>
                 <input
                   type="text"
-                  value={doc.lampiranHeaderTitle}
-                  onChange={(e) => updateField('lampiranHeaderTitle', e.target.value)}
-                  className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
+                  value={doc.lampiranNomor}
+                  onChange={(e) => updateField('lampiranNomor', e.target.value)}
+                  className="w-full rounded-lg bg-[#1E1812] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] font-mono-num uppercase"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[#B5A894] mb-1">
-                    Nomor Lampiran
-                  </label>
-                  <input
-                    type="text"
-                    value={doc.lampiranNomor}
-                    onChange={(e) => updateField('lampiranNomor', e.target.value)}
-                    className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] font-mono-num uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#B5A894] mb-1">
-                    Tanggal Lampiran (Kapital)
-                  </label>
-                  <input
-                    type="text"
-                    value={doc.lampiranTanggalUpper}
-                    onChange={(e) => updateField('lampiranTanggalUpper', e.target.value)}
-                    className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] font-mono-num uppercase"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-[#B5A894] mb-1">
+                  Tanggal Header (Kapital)
+                </label>
+                <input
+                  type="text"
+                  value={doc.lampiranTanggalUpper}
+                  onChange={(e) => updateField('lampiranTanggalUpper', e.target.value)}
+                  className="w-full rounded-lg bg-[#1E1812] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] font-mono-num uppercase"
+                />
               </div>
+            </div>
+          </div>
 
+          {doc.useLampiran && (
+            <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-[#B5A894] mb-1">
                   Judul Daftar Personel
@@ -507,15 +723,108 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
                   className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3 py-2 text-xs text-[#F5F0E6] uppercase"
                 />
               </div>
+
+              {/* Pengaturan Lebar Kolom Tabel Lampiran */}
+              <div className="rounded-xl bg-[#15110C] border border-[#3D3225] p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-[#D4A017]" />
+                    <span className="text-xs font-semibold text-[#F5F0E6]">
+                      Lebar Kolom Tabel (Total 170 mm)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateField('lampiranColWidths', { ...DEFAULT_LAMPIRAN_COL_WIDTHS })}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#D4A017] hover:text-[#F4C94D] cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset Default</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-[#9E907A]">
+                  Geser slider di bawah atau seret langsung batas garis kolom pada tabel pratinjau. Otomatis sinkron ke pratinjau, PDF, dan .DOCX.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {LAMPIRAN_COLS_META.map(({ key, label }) => {
+                    const otherMinSum = LAMPIRAN_COLS_META.filter((c) => c.key !== key).reduce(
+                      (s, c) => s + LAMPIRAN_COL_MIN_WIDTHS[c.key],
+                      0
+                    );
+                    const minMm = LAMPIRAN_COL_MIN_WIDTHS[key];
+                    const maxMm = LAMPIRAN_TABLE_TOTAL_MM - otherMinSum;
+                    const currentMm = colWidths[key];
+
+                    return (
+                      <div
+                        key={key}
+                        className="rounded-lg bg-[#1E1812] border border-[#362C21] px-2.5 py-2 space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-[#F5F0E6]">{label}</span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={minMm}
+                              max={maxMm}
+                              step={0.5}
+                              value={currentMm}
+                              onChange={(e) => {
+                                const parsed = parseFloat(e.target.value);
+                                if (!Number.isNaN(parsed) && parsed >= minMm) {
+                                  updateLampiranColWidth(key, parsed);
+                                }
+                              }}
+                              aria-label={`Lebar kolom ${label} dalam milimeter`}
+                              className="w-14 rounded bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-1.5 py-0.5 text-right text-[11px] font-mono-num text-[#F4C94D]"
+                            />
+                            <span className="text-[10px] font-mono-num text-[#9E907A]">mm</span>
+                          </div>
+                        </div>
+                        <input
+                          type="range"
+                          min={minMm}
+                          max={maxMm}
+                          step={0.5}
+                          value={currentMm}
+                          onChange={(e) => updateLampiranColWidth(key, parseFloat(e.target.value))}
+                          aria-label={`Slider lebar kolom ${label}`}
+                          className="w-full accent-[#D4A017] cursor-pointer"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
-          <div className={doc.useLampiran ? 'pt-2 border-t border-[#32291E]' : 'pt-1'}>
+          <div className="pt-2 border-t border-[#32291E]">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <span className="text-xs font-semibold text-[#F5F0E6]">
                 Daftar Personel Bertugas
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={personnelExcelInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.ods"
+                  className="hidden"
+                  onChange={(e) => {
+                    void handlePersonnelExcelImport(e.target.files?.[0]);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => personnelExcelInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#4A3D2C] bg-[#251E16] hover:border-[#D4A017] text-xs font-semibold text-[#F5F0E6] transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#D4A017]" />
+                  <span>Import Excel</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowRosterModal(true)}
@@ -534,6 +843,12 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
                 </button>
               </div>
             </div>
+
+            {excelError && (
+              <div className="mb-3 rounded-lg bg-[#2A1715] border border-red-700/60 px-3 py-2 text-xs text-red-200">
+                {excelError}
+              </div>
+            )}
 
             <div className="space-y-2.5">
               {doc.personelList.map((row, idx) => (
@@ -673,7 +988,17 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
                 <input
                   type="text"
                   value={doc.tanggalSuratHal1}
-                  onChange={(e) => updateField('tanggalSuratHal1', e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onChange({
+                      ...doc,
+                      tanggalSuratHal1: val,
+                      lampiranTanggalUpper: !doc.useLampiran
+                        ? val.replace(/\s+/g, ' ').trim().toUpperCase()
+                        : doc.lampiranTanggalUpper,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }}
                   className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3.5 py-2 text-sm text-[#F5F0E6]"
                 />
               </div>
@@ -694,13 +1019,15 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
 
             <div>
               <label className="block text-xs font-medium text-[#B5A894] mb-1.5">
-                Jabatan Penanda Tangan
+                Jabatan Penanda Tangan (1 Baris · Mepet Margin Kanan)
               </label>
               <input
                 type="text"
-                value={doc.pejabatJabatan}
-                onChange={(e) => updateField('pejabatJabatan', e.target.value)}
-                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3.5 py-2 text-sm text-[#F5F0E6] uppercase"
+                value={doc.pejabatJabatan.replace(/[\r\n]+/g, ' ')}
+                onChange={(e) =>
+                  updateField('pejabatJabatan', e.target.value.replace(/[\r\n]+/g, ' '))
+                }
+                className="w-full rounded-lg bg-[#15110C] border border-[#3D3225] focus:border-[#D4A017] focus:outline-none px-3.5 py-2 text-sm text-[#F5F0E6]"
               />
             </div>
 
@@ -1225,6 +1552,14 @@ export const SprinEditorForm: React.FC<SprinEditorFormProps> = ({
           </div>
         </div>
       )}
+      {/* Fullscreen Body Editor (Pertimbangan, Dasar Hukum & Surat, Untuk) */}
+      <FullscreenBodyEditorModal
+        isOpen={fullscreenTab !== null}
+        initialTab={fullscreenTab ?? 'pertimbangan'}
+        doc={doc}
+        onChange={onChange}
+        onClose={() => setFullscreenTab(null)}
+      />
     </div>
   );
 };

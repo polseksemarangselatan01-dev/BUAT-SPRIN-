@@ -2,12 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Eye, Printer, ZoomIn, ZoomOut } from 'lucide-react';
 import { ArchiveView } from './components/ArchiveView';
 import { DashboardHeader } from './components/DashboardHeader';
-import { LetterPageOne } from './components/LetterPageOne';
-import { LetterPageTwo } from './components/LetterPageTwo';
+import {
+  computePageOneCatchword,
+  LetterPageOne,
+  useSprinPageOneSlices,
+} from './components/LetterPageOne';
+import {
+  computeLampiranCatchword,
+  LetterPageTwo,
+  useLampiranPages,
+} from './components/LetterPageTwo';
 import { PersonnelRosterView } from './components/PersonnelRosterView';
 import { SidebarNav } from './components/SidebarNav';
 import { EditorSectionId, SprinEditorForm } from './components/SprinEditorForm';
 import {
+  DEFAULT_LAMPIRAN_COL_WIDTHS,
   DEFAULT_SPRIN_DOCUMENT,
   DEFAULT_STAMP_CONFIG,
   INITIAL_ARCHIVE_DOCUMENTS,
@@ -40,10 +49,35 @@ function readStorage<T>(key: string, fallback: T): T {
 }
 
 function normalizeDoc(doc: SprinDocument): SprinDocument {
+  const rawHeaderTitle = (doc.lampiranHeaderTitle || '').trim();
+  const normalizedHeaderTitle =
+    !rawHeaderTitle ||
+    rawHeaderTitle === 'LAMPIRAN SPRIN KAPOLSEK SMG SLTN' ||
+    rawHeaderTitle === 'LAMPIRAN  SPRIN  KAPOLSEK  SMG SLTN' ||
+    rawHeaderTitle === 'SPRIN KAPOLSEK SMG SELATAN'
+      ? 'LAMP SPRIN KAPOLSEK SMG SELATAN'
+      : doc.lampiranHeaderTitle;
+
+  const rawKepadaText = (doc.kepadaText || '').trim();
+  const normalizedKepadaText =
+    !rawKepadaText ||
+    rawKepadaText ===
+      'NAMA, PANGKAT, NRP DAN JABATANNYA SEPERTI TERSEBUT DALAM LAMPIRAN SURAT PERINTAH INI.'
+      ? DEFAULT_SPRIN_DOCUMENT.kepadaText
+      : doc.kepadaText;
+
+  const personelCount = Array.isArray(doc.personelList) ? doc.personelList.length : 0;
+
   return {
     ...DEFAULT_SPRIN_DOCUMENT,
     ...doc,
-    useLampiran: doc.useLampiran ?? false,
+    useLampiran: (doc.useLampiran ?? false) || personelCount > 5,
+    kepadaText: normalizedKepadaText,
+    lampiranHeaderTitle: normalizedHeaderTitle,
+    lampiranColWidths: {
+      ...DEFAULT_LAMPIRAN_COL_WIDTHS,
+      ...(doc.lampiranColWidths || {}),
+    },
     stampConfig: {
       ...DEFAULT_STAMP_CONFIG,
       ...(doc.stampConfig || {}),
@@ -119,6 +153,19 @@ export default function App() {
     const done = checks.filter(Boolean).length;
     return Math.round((done / checks.length) * 100);
   }, [activeDoc]);
+
+  const { chunks: lampiranPages, lampiranMeasurerNode } = useLampiranPages(activeDoc);
+
+  const { slices: pageOneSlices, measurerNode } = useSprinPageOneSlices(activeDoc);
+  const autoFirstPageCatchword =
+    pageOneSlices.length > 1
+      ? computePageOneCatchword(activeDoc, pageOneSlices[1])
+      : undefined;
+  const firstPageCatchword =
+    (activeDoc.kataSambung || '').trim() || autoFirstPageCatchword || '';
+  const totalPageCount = activeDoc.useLampiran
+    ? pageOneSlices.length + lampiranPages.length
+    : pageOneSlices.length;
 
   const handleSaveToArchive = () => {
     const stampedDoc: SprinDocument = {
@@ -198,15 +245,22 @@ export default function App() {
   const handleAddRosterPersonToActive = (person: PersonnelRow) => {
     const exists = activeDoc.personelList.some((p) => p.nrp === person.nrp && person.nrp !== '');
     if (exists) return;
+    const nextList = [
+      ...activeDoc.personelList,
+      { ...person, id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` },
+    ];
+    const autoLampiran = activeDoc.useLampiran || nextList.length > 5;
     setActiveDoc((prev) => ({
       ...prev,
-      personelList: [
-        ...prev.personelList,
-        { ...person, id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` },
-      ],
+      personelList: nextList,
+      useLampiran: autoLampiran,
       updatedAt: new Date().toISOString(),
     }));
-    showToast(`${person.pangkat} ${person.nama} ditambahkan ke daftar personel`);
+    showToast(
+      nextList.length > 5
+        ? `${person.pangkat} ${person.nama} ditambahkan (> 5 personel otomatis memakai Lampiran)`
+        : `${person.pangkat} ${person.nama} ditambahkan ke daftar personel`
+    );
   };
 
   const handleFocusFromLetter = (section: EditorSectionId) => {
@@ -226,8 +280,8 @@ export default function App() {
           onSaveToArchive={handleSaveToArchive}
           onExportWord={async () => {
             try {
-              await exportSprinToWord(activeDoc);
-              showToast('File .DOCX (A4 · Arial 12pt) diunduh');
+              await exportSprinToWord(activeDoc, firstPageCatchword);
+              showToast('File .DOCX (A4 · Arial 12pt · Margin 2,5 / 1,5 / 2 / 1,5 cm) diunduh');
             } catch {
               showToast('Gagal membuat file .DOCX');
             }
@@ -256,6 +310,7 @@ export default function App() {
             rosterCount={roster.length}
             activeDocNumber={activeDoc.nomorSprin}
             useLampiran={activeDoc.useLampiran}
+            pageCount={totalPageCount}
             onNewBlankSprin={handleCreateNewSprin}
             onLoadReferenceTemplate={handleLoadReferenceTemplate}
           />
@@ -271,6 +326,7 @@ export default function App() {
                     roster={roster}
                     activeSection={activeSection}
                     onChangeSection={setActiveSection}
+                    autoCatchword={autoFirstPageCatchword}
                   />
                 </div>
 
@@ -294,9 +350,9 @@ export default function App() {
                         <div className="flex items-center gap-1 p-1 rounded-lg bg-[#110D09] border border-[#32291E]">
                           {(
                             [
-                              { id: 'both', label: 'Semua (2 Hal)' },
-                              { id: 'page1', label: 'Halaman 1' },
-                              { id: 'page2', label: 'Halaman 2' },
+                              { id: 'both', label: `Semua (${totalPageCount} Hal)` },
+                              { id: 'page1', label: `Isi Sprin (${pageOneSlices.length} Hal)` },
+                              { id: 'page2', label: `Lampiran (${lampiranPages.length} Hal)` },
                             ] as const
                           ).map((tab) => (
                             <button
@@ -315,7 +371,7 @@ export default function App() {
                         </div>
                       ) : (
                         <span className="px-2.5 py-1 rounded-lg bg-[#110D09] border border-[#32291E] text-xs font-semibold text-[#D4A017]">
-                          1 Halaman · Tanpa Lampiran
+                          {pageOneSlices.length} Halaman · Tanpa Lampiran
                         </span>
                       )}
 
@@ -348,68 +404,104 @@ export default function App() {
                   <div className="flex-1 overflow-auto p-6 lg:p-8 flex flex-col items-center gap-8">
                     {(!activeDoc.useLampiran ||
                       previewPage === 'both' ||
-                      previewPage === 'page1') && (
-                      <div className="flex flex-col items-center">
-                        <div className="w-full flex items-center justify-between text-xs text-[#9E907A] mb-2 px-1">
-                          <span>
-                            {activeDoc.useLampiran
-                              ? 'Halaman 1 — Surat Perintah'
-                              : 'Surat Perintah (1 Halaman — Tanpa Lampiran)'}
-                          </span>
-                          <span className="font-mono-num">A4 · 210 × 297 mm</span>
-                        </div>
-                        <div
-                          style={{
-                            width: `calc(210mm * ${zoom})`,
-                            height: `calc(297mm * ${zoom})`,
-                          }}
-                          className="relative shrink-0"
-                        >
-                          <div
-                            style={{
-                              transform: `scale(${zoom})`,
-                              transformOrigin: 'top left',
-                            }}
-                          >
-                            <LetterPageOne
-                              doc={activeDoc}
-                              onFocusSection={handleFocusFromLetter}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {activeDoc.useLampiran &&
-                      (previewPage === 'both' || previewPage === 'page2') && (
-                        <div className="flex flex-col items-center">
-                          <div className="w-full flex items-center justify-between text-xs text-[#9E907A] mb-2 px-1">
-                            <span>Halaman 2 — Lampiran Daftar Personel</span>
-                            <span className="font-mono-num">
-                              {activeDoc.personelList.length} Personel
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              width: `calc(210mm * ${zoom})`,
-                              height: `calc(297mm * ${zoom})`,
-                            }}
-                            className="relative shrink-0"
-                          >
+                      previewPage === 'page1') &&
+                      pageOneSlices.map((slice, sIdx) => {
+                        const sliceCatchword =
+                          sIdx === 0 && (activeDoc.kataSambung || '').trim()
+                            ? activeDoc.kataSambung!.trim()
+                            : sIdx < pageOneSlices.length - 1
+                              ? computePageOneCatchword(activeDoc, pageOneSlices[sIdx + 1])
+                              : undefined;
+                        return (
+                          <div key={`page-one-slice-${sIdx}`} className="flex flex-col items-center">
+                            <div className="w-full flex items-center justify-between text-xs text-[#9E907A] mb-2 px-1">
+                              <span>
+                                {sIdx === 0
+                                  ? activeDoc.useLampiran
+                                    ? 'Halaman 1 — Surat Perintah'
+                                    : pageOneSlices.length === 1
+                                      ? 'Surat Perintah (1 Halaman — Tanpa Lampiran)'
+                                      : `Halaman 1 — Surat Perintah`
+                                  : `Halaman ${sIdx + 1} — Lanjutan Surat Perintah (Header)`}
+                              </span>
+                              <span className="font-mono-num">
+                                A4 · 210 × 297 mm · Margin 2,5 / 1,5 / 2 / 1,5 cm
+                              </span>
+                            </div>
                             <div
                               style={{
-                                transform: `scale(${zoom})`,
-                                transformOrigin: 'top left',
+                                width: `calc(210mm * ${zoom})`,
+                                height: `calc(297mm * ${zoom})`,
                               }}
+                              className="relative shrink-0"
                             >
-                              <LetterPageTwo
-                                doc={activeDoc}
-                                onFocusSection={handleFocusFromLetter}
-                              />
+                              <div
+                                style={{
+                                  transform: `scale(${zoom})`,
+                                  transformOrigin: 'top left',
+                                }}
+                              >
+                                <LetterPageOne
+                                  doc={activeDoc}
+                                  slice={slice}
+                                  catchword={sliceCatchword}
+                                  onFocusSection={handleFocusFromLetter}
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })}
+
+                    {activeDoc.useLampiran &&
+                      (previewPage === 'both' || previewPage === 'page2') &&
+                      lampiranPages.map((chunk, pIdx) => {
+                        const chunkCatchword =
+                          pIdx < lampiranPages.length - 1
+                            ? computeLampiranCatchword(lampiranPages[pIdx + 1])
+                            : undefined;
+                        return (
+                          <div key={`lampiran-page-${pIdx}`} className="flex flex-col items-center">
+                            <div className="w-full flex items-center justify-between text-xs text-[#9E907A] mb-2 px-1">
+                              <span>
+                                Halaman {pageOneSlices.length + pIdx + 1} — Lampiran Daftar Personel
+                              </span>
+                              <span className="font-mono-num">
+                                {chunk.rows.length} / {activeDoc.personelList.length} Personel
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                width: `calc(210mm * ${zoom})`,
+                                height: `calc(297mm * ${zoom})`,
+                              }}
+                              className="relative shrink-0"
+                            >
+                              <div
+                                style={{
+                                  transform: `scale(${zoom})`,
+                                  transformOrigin: 'top left',
+                                }}
+                              >
+                                <LetterPageTwo
+                                  doc={activeDoc}
+                                  pageChunk={chunk}
+                                  lampiranPageNumber={pIdx + 1}
+                                  catchword={chunkCatchword}
+                                  onFocusSection={handleFocusFromLetter}
+                                  onUpdateColWidths={(widths) =>
+                                    setActiveDoc((prev) => ({
+                                      ...prev,
+                                      lampiranColWidths: widths,
+                                      updatedAt: new Date().toISOString(),
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               </div>
@@ -456,10 +548,44 @@ export default function App() {
         )}
       </div>
 
-      {/* DEDICATED PRINT-ONLY CONTAINER (Renders Page 1, and optional Page 2 only when useLampiran is enabled) */}
+      {/* OFFSCREEN PAGE-BREAK MEASURERS */}
+      {measurerNode}
+      {lampiranMeasurerNode}
+
+      {/* DEDICATED PRINT-ONLY CONTAINER (Renders Page 1..N and optional Lampiran pages with header) */}
       <div className="hidden print-only-container">
-        <LetterPageOne doc={activeDoc} />
-        {activeDoc.useLampiran && <LetterPageTwo doc={activeDoc} />}
+        {pageOneSlices.map((slice, sIdx) => {
+          const sliceCatchword =
+            sIdx === 0 && (activeDoc.kataSambung || '').trim()
+              ? activeDoc.kataSambung!.trim()
+              : sIdx < pageOneSlices.length - 1
+                ? computePageOneCatchword(activeDoc, pageOneSlices[sIdx + 1])
+                : undefined;
+          return (
+            <LetterPageOne
+              key={`print-page1-${sIdx}`}
+              doc={activeDoc}
+              slice={slice}
+              catchword={sliceCatchword}
+            />
+          );
+        })}
+        {activeDoc.useLampiran &&
+          lampiranPages.map((chunk, pIdx) => {
+            const chunkCatchword =
+              pIdx < lampiranPages.length - 1
+                ? computeLampiranCatchword(lampiranPages[pIdx + 1])
+                : undefined;
+            return (
+              <LetterPageTwo
+                key={`print-lampiran-${pIdx}`}
+                doc={activeDoc}
+                pageChunk={chunk}
+                lampiranPageNumber={pIdx + 1}
+                catchword={chunkCatchword}
+              />
+            );
+          })}
       </div>
     </div>
   );

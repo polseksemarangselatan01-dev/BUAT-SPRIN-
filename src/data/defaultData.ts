@@ -1,4 +1,30 @@
-import { PersonnelRow, SatkerPreset, SprinDocument, StampSignatureConfig } from '../types/sprin';
+import {
+  LampiranColumnWidths,
+  PersonnelRow,
+  SatkerPreset,
+  SprinDocument,
+  StampSignatureConfig,
+} from '../types/sprin';
+
+export function getSprinContinuationHeaderTitle(
+  doc: Pick<SprinDocument, 'lampiranHeaderTitle' | 'sprinHeaderTitle'>
+): string {
+  const custom = (doc.sprinHeaderTitle || '').trim();
+  if (custom) return custom.toUpperCase();
+  const base = (doc.lampiranHeaderTitle || 'LAMP SPRIN KAPOLSEK SMG SELATAN').trim();
+  const stripped = base.replace(/^(?:LAMPIRAN|LAMP\.?)\s+/i, '').trim();
+  return (stripped || 'SPRIN KAPOLSEK SMG SELATAN').toUpperCase();
+}
+
+export function getLampiranHeaderTitle(
+  doc: Pick<SprinDocument, 'lampiranHeaderTitle'>
+): string {
+  const raw = (doc.lampiranHeaderTitle || 'LAMP SPRIN KAPOLSEK SMG SELATAN').trim().toUpperCase();
+  if (!raw) return 'LAMP SPRIN KAPOLSEK SMG SELATAN';
+  if (/^LAMP\b/.test(raw)) return raw;
+  if (/^LAMPIRAN\s+/.test(raw)) return raw.replace(/^LAMPIRAN\s+/, 'LAMP ');
+  return `LAMP ${raw}`;
+}
 
 export const QUICK_WINS_PROGRAMS: string[] = [
   'Quick Wins 1 — Perbaikan Interaksi Polisi dengan Masyarakat',
@@ -22,7 +48,7 @@ export const SATKER_PRESETS: SatkerPreset[] = [
     kopLine1: 'KEPOLISIAN NEGARA REPUBLIK INDONESIA',
     kopLine2: 'DAERAH JAWA TENGAH',
     kopLine3: 'RESOR KOTA BESAR SEMARANG',
-    lampiranHeaderTitle: 'LAMPIRAN SPRIN KAPOLRESTABES SMG',
+    lampiranHeaderTitle: 'LAMP SPRIN KAPOLRESTABES SMG',
     pejabatJabatan: 'KAPOLRESTABES SEMARANG POLDA JATENG',
     pejabatNama: 'ERLIN TANG JAYA, S.H., S.I.K., M.H.',
     pejabatPangkatNrp: 'KOMISARIS BESAR POLISI NRP 78061264',
@@ -39,7 +65,7 @@ export const SATKER_PRESETS: SatkerPreset[] = [
     kopLine1: 'POLRI DAERAH JAWA TENGAH',
     kopLine2: 'RESOR KOTA BESAR SEMARANG',
     kopLine3: 'SEKTOR SEMARANG SELATAN',
-    lampiranHeaderTitle: 'LAMPIRAN SPRIN KAPOLSEK SMG SLTN',
+    lampiranHeaderTitle: 'LAMP SPRIN KAPOLSEK SMG SELATAN',
     pejabatJabatan: 'KAPOLSEK SEMARANG SELATAN POLRESTABES SEMARANG',
     pejabatNama: 'RISMANTO, S.H.,M.H.',
     pejabatPangkatNrp: 'KOMISARIS POLISI NRP 73020406',
@@ -56,7 +82,7 @@ export const SATKER_PRESETS: SatkerPreset[] = [
     kopLine1: 'POLRI DAERAH JAWA TENGAH',
     kopLine2: 'RESOR KOTA BESAR SEMARANG',
     kopLine3: 'SEKTOR SEMARANG TENGAH',
-    lampiranHeaderTitle: 'LAMPIRAN SPRIN KAPOLSEK SMG TGH',
+    lampiranHeaderTitle: 'LAMP SPRIN KAPOLSEK SMG TGH',
     pejabatJabatan: 'KAPOLSEK SEMARANG TENGAH POLRESTABES SEMARANG',
     pejabatNama: 'SUYITNO, S.H., M.H.',
     pejabatPangkatNrp: 'KOMISARIS POLISI NRP 74050318',
@@ -73,7 +99,7 @@ export const SATKER_PRESETS: SatkerPreset[] = [
     kopLine1: 'POLRI DAERAH JAWA TENGAH',
     kopLine2: 'RESOR KOTA BESAR SEMARANG',
     kopLine3: 'SEKTOR CANDISARI',
-    lampiranHeaderTitle: 'LAMPIRAN SPRIN KAPOLSEK CANDISARI',
+    lampiranHeaderTitle: 'LAMP SPRIN KAPOLSEK CANDISARI',
     pejabatJabatan: 'KAPOLSEK CANDISARI POLRESTABES SEMARANG',
     pejabatNama: 'AGUS PRASETYO, S.I.K.',
     pejabatPangkatNrp: 'AKP NRP 82080412',
@@ -230,6 +256,68 @@ export const DEFAULT_STAMP_CONFIG: StampSignatureConfig = {
   aboveText: true,
 };
 
+export const LAMPIRAN_TABLE_TOTAL_MM = 170;
+
+export const DEFAULT_LAMPIRAN_COL_WIDTHS: LampiranColumnWidths = {
+  no: 11,
+  nama: 42,
+  pangkat: 25,
+  nrp: 25,
+  jabatan: 51,
+  ket: 16,
+};
+
+export const LAMPIRAN_COL_MIN_WIDTHS: LampiranColumnWidths = {
+  no: 8,
+  nama: 20,
+  pangkat: 14,
+  nrp: 16,
+  jabatan: 20,
+  ket: 10,
+};
+
+export function getNormalizedLampiranColWidths(
+  widths?: Partial<LampiranColumnWidths>
+): LampiranColumnWidths {
+  const raw: LampiranColumnWidths = {
+    no: Math.max(LAMPIRAN_COL_MIN_WIDTHS.no, Number(widths?.no) || DEFAULT_LAMPIRAN_COL_WIDTHS.no),
+    nama: Math.max(
+      LAMPIRAN_COL_MIN_WIDTHS.nama,
+      Number(widths?.nama) || DEFAULT_LAMPIRAN_COL_WIDTHS.nama
+    ),
+    pangkat: Math.max(
+      LAMPIRAN_COL_MIN_WIDTHS.pangkat,
+      Number(widths?.pangkat) || DEFAULT_LAMPIRAN_COL_WIDTHS.pangkat
+    ),
+    nrp: Math.max(
+      LAMPIRAN_COL_MIN_WIDTHS.nrp,
+      Number(widths?.nrp) || DEFAULT_LAMPIRAN_COL_WIDTHS.nrp
+    ),
+    jabatan: Math.max(
+      LAMPIRAN_COL_MIN_WIDTHS.jabatan,
+      Number(widths?.jabatan) || DEFAULT_LAMPIRAN_COL_WIDTHS.jabatan
+    ),
+    ket: Math.max(
+      LAMPIRAN_COL_MIN_WIDTHS.ket,
+      Number(widths?.ket) || DEFAULT_LAMPIRAN_COL_WIDTHS.ket
+    ),
+  };
+
+  const sum = raw.no + raw.nama + raw.pangkat + raw.nrp + raw.jabatan + raw.ket;
+  if (Math.abs(sum - LAMPIRAN_TABLE_TOTAL_MM) < 0.05) {
+    return raw;
+  }
+
+  const scale = LAMPIRAN_TABLE_TOTAL_MM / sum;
+  const no = +(raw.no * scale).toFixed(1);
+  const nama = +(raw.nama * scale).toFixed(1);
+  const pangkat = +(raw.pangkat * scale).toFixed(1);
+  const nrp = +(raw.nrp * scale).toFixed(1);
+  const jabatan = +(raw.jabatan * scale).toFixed(1);
+  const ket = +(LAMPIRAN_TABLE_TOTAL_MM - (no + nama + pangkat + nrp + jabatan)).toFixed(1);
+  return { no, nama, pangkat, nrp, jabatan, ket };
+}
+
 export const DEFAULT_SPRIN_DOCUMENT: SprinDocument = {
   id: 'sprin-1488-x-2026',
   status: 'Siap Cetak',
@@ -256,7 +344,7 @@ export const DEFAULT_SPRIN_DOCUMENT: SprinDocument = {
     'Peraturan Kepolisian Negara Republik Indonesia Nomor 2 Tahun 2021 tentang Susunan Organisasi dan Tata Kerja pada tingkat Kepolisian Resor dan Kepolisian Sektor sebagaimana telah diubah dengan Peraturan Kepolisian Negara Republik Indonesia Nomor 7 Tahun 2025 tentang Perubahan atas Peraturan Kepolisian Negara Republik Indonesia Nomor 2 Tahun 2021 tentang Susunan Organisasi dan Tata Kerja pada tingkat Kepolisian Resor dan Kepolisian Sektor.',
   ],
   kepadaText:
-    'NAMA, PANGKAT, NRP DAN JABATANNYA SEPERTI TERSEBUT DALAM LAMPIRAN SURAT PERINTAH INI.',
+    'NAMA, PANGKAT/NRP/NIP DAN JABATAN SEBAGAIMANA YANG TERCANTUM DALAM LAMPIRAN SURAT PERINTAH INI.',
   untukList: [
     'sambil menunggu keputusan yang bersifat definitif, agar melaksanakan tugas sebagai Pama Polrestabes Semarang;',
     'melaksanakan perintah ini dengan seksama dan penuh rasa tanggung jawab;',
@@ -267,13 +355,16 @@ export const DEFAULT_SPRIN_DOCUMENT: SprinDocument = {
     'Kasipropam Polrestabes Semarang.',
     'Kapolsek Semarang Selatan Polrestabes Semarang.',
   ],
+  kataSambung: '',
 
-  // Lampiran (digunakan bila mode Lampiran diaktifkan)
-  lampiranHeaderTitle: 'LAMPIRAN SPRIN KAPOLSEK SMG SLTN',
+  // Header Halaman 2+ & Lampiran
+  sprinHeaderTitle: '',
+  lampiranHeaderTitle: 'LAMP SPRIN KAPOLSEK SMG SELATAN',
   lampiranNomor: 'SPRIN / 1488 /X/ KEP./ 2026',
   lampiranTanggalUpper: '29 OKTOBER 2026',
   lampiranJudul: 'DAFTAR NAMA PERSONEL YANG DIPERINTAHKAN',
   lampiranSubjudul: 'PADA TANGGAL 29 OKTOBER 2026',
+  lampiranColWidths: { ...DEFAULT_LAMPIRAN_COL_WIDTHS },
   personelList: [INITIAL_PERSONNEL_ROSTER[0]],
 
   // Pengesahan & Pejabat
@@ -314,7 +405,7 @@ export const INITIAL_ARCHIVE_DOCUMENTS: SprinDocument[] = [
       'melaksanakan perintah ini dengan seksama dan penuh rasa tanggung jawab.',
     ],
     tembusanList: ['Kapolrestabes Semarang', 'Kabagops Polrestabes Smg'],
-    lampiranHeaderTitle: 'LAMPIRAN  SPRIN  KAPOLSEK  SMG SLTN',
+    lampiranHeaderTitle: 'LAMP SPRIN KAPOLSEK SMG SELATAN',
     lampiranNomor: 'SPRIN /   211   /XI/ HUK.6.6./ 2026',
     lampiranTanggalUpper: '18        NOVEMBER 2026',
     lampiranJudul: 'DAFTAR NAMA PERS PENGAMANAN PENSI SMAN 11 SEMARANG',

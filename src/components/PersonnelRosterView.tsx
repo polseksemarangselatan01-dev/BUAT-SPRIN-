@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Plus, Search, Trash2, UserPlus } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { CheckCircle2, FileDown, FileSpreadsheet, Plus, Search, Trash2, UserPlus, X } from 'lucide-react';
+import { mergePersonnelByNrp } from '../data/defaultData';
 import { PersonnelRow } from '../types/sprin';
+import { downloadPersonnelExcelTemplate, parsePersonnelExcel } from '../utils/importExcel';
 
 interface PersonnelRosterViewProps {
   roster: PersonnelRow[];
@@ -20,6 +22,11 @@ export const PersonnelRosterView: React.FC<PersonnelRosterViewProps> = ({
   const [pangkat, setPangkat] = useState('AIPDA');
   const [nrp, setNrp] = useState('');
   const [jabatan, setJabatan] = useState('');
+  const [importFeedback, setImportFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -63,16 +70,107 @@ export const PersonnelRosterView: React.FC<PersonnelRosterViewProps> = ({
     onChangeRoster(roster.filter((p) => p.id !== id));
   };
 
+  const handleExcelUpload = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const result = await parsePersonnelExcel(file);
+      if (result.rows.length === 0) {
+        setImportFeedback({
+          type: 'error',
+          message: 'Tidak ada baris personel yang terbaca. Pastikan kolom NAMA dan NRP terisi.',
+        });
+        return;
+      }
+
+      const existingNrpSet = new Set(roster.map((p) => p.nrp.trim()));
+      let overwritten = 0;
+      let added = 0;
+      result.rows.forEach((r) => {
+        if (existingNrpSet.has(r.nrp.trim())) overwritten++;
+        else added++;
+      });
+
+      const merged = mergePersonnelByNrp(roster, result.rows);
+      onChangeRoster(merged);
+      setImportFeedback({
+        type: 'success',
+        message: `Berhasil impor ${result.rows.length} personel dari "${result.sheetName}" (${added} baru, ${overwritten} data lama ditimpa berdasarkan NRP).`,
+      });
+    } catch (err) {
+      setImportFeedback({
+        type: 'error',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Gagal membaca file Excel. Gunakan format .xlsx, .xls, atau .csv.',
+      });
+    }
+  };
+
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h2 className="font-display text-2xl font-bold tracking-wide text-[#F7F2E8] uppercase">
-          DATABASE PERSONEL KESATUAN
-        </h2>
-        <p className="text-sm text-[#A89C89] mt-0.5">
-          Kelola daftar induk personel ({roster.length} personel). Jika NRP sudah ada, data lama otomatis ditimpa.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl font-bold tracking-wide text-[#F7F2E8] uppercase">
+            DATABASE PERSONEL KESATUAN
+          </h2>
+          <p className="text-sm text-[#A89C89] mt-0.5">
+            Kelola daftar induk personel ({roster.length} personel). Jika NRP sudah ada, data lama otomatis ditimpa.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,.ods"
+            className="hidden"
+            onChange={(e) => {
+              void handleExcelUpload(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={downloadPersonnelExcelTemplate}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#4A3D2C] bg-[#241C14] hover:bg-[#2F251A] hover:border-[#D4A017]/60 text-xs font-semibold text-[#F5F0E6] transition-colors cursor-pointer"
+          >
+            <FileDown className="w-3.5 h-3.5 text-[#D4A017]" />
+            <span>Template .XLSX</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => excelInputRef.current?.click()}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D4A017] hover:bg-[#E5B022] text-xs font-bold text-[#14100C] transition-colors cursor-pointer shadow-sm"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Import dari Excel</span>
+          </button>
+        </div>
       </div>
+
+      {importFeedback && (
+        <div
+          className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 text-xs ${
+            importFeedback.type === 'success'
+              ? 'bg-[#1E2418] border-emerald-700/60 text-emerald-200'
+              : 'bg-[#2A1715] border-red-700/60 text-red-200'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{importFeedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setImportFeedback(null)}
+            aria-label="Tutup pemberitahuan"
+            className="p-1 rounded hover:bg-black/20 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Add New Person Form */}
       <form

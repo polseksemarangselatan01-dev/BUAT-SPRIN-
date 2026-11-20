@@ -21,6 +21,7 @@ interface SidebarNavProps {
   rosterCount: number;
   activeDocNumber: string;
   useLampiran: boolean;
+  pageCount?: number;
   onNewBlankSprin: () => void;
   onLoadReferenceTemplate: () => void;
 }
@@ -36,6 +37,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   rosterCount,
   activeDocNumber,
   useLampiran,
+  pageCount,
   onNewBlankSprin,
   onLoadReferenceTemplate,
 }) => {
@@ -180,7 +182,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               {activeDocNumber || 'Belum bernomor'}
             </div>
             <div className="text-[11px] text-[#9E907A] mt-1">
-              {useLampiran ? '2 Halaman A4 · Hal 1 & Lampiran' : '1 Halaman A4 · Tanpa Lampiran'}
+              {useLampiran
+                ? `${pageCount || 2} Halaman A4 · Hal 1 & Lampiran`
+                : `${pageCount || 1} Halaman A4 · Tanpa Lampiran`}
             </div>
           </div>
       </aside>
